@@ -1,0 +1,31 @@
+node_modules/
+dist/
+build/
+*.tsbuildinfo
+
+# env — matches .env at any depth (root, client/, server/, database/) but not .env.example
+.env
+.env.local
+*.local
+
+# uploads (user-generated content, never committed)
+server/uploads/*
+!server/uploads/.gitkeep
+
+*.log
+npm-debug.log*
+
+# editor
+.vscode/*
+!.vscode/extensions.json
+.idea/
+
+# os
+.DS_Store
+Thumbs.db
+
+# vite
+client/.vite/
+
+# pwa (dev-mode service worker output; production build output already covered by dist/)
+client/dev-dist/

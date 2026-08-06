@@ -1,0 +1,66 @@
+/* Dribbble UI Theme - Tubik & Paperpillar aesthetics */
+
+/* Metric Cards (Tubik style) */
+.glass-metric-card {
+  @apply rounded-3xl p-5 border border-white/10 backdrop-blur-md shadow-xl relative overflow-hidden;
+}
+
+.glass-metric-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(120deg, rgba(255,255,255,0.15) 0%, rgba(255,255,255,0) 100%);
+  pointer-events: none;
+}
+
+/* Gradients for Tubik metric cards */
+.bg-gradient-tubik-dark {
+  background: linear-gradient(135deg, #111827 0%, #0f172a 100%);
+}
+.bg-gradient-tubik-coral {
+  background: linear-gradient(135deg, #ff5e62 0%, #ff9966 100%);
+}
+.bg-gradient-tubik-violet {
+  background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%);
+}
+.bg-gradient-tubik-amber {
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+}
+
+/* Paperpillar Style Soft Pastel Glassmorphism */
+.glass-panel-soft {
+  @apply rounded-3xl bg-white/85 dark:bg-black/60 border border-slate-200/80 dark:border-white/10 backdrop-blur-md shadow-sm;
+}
+
+/* Date Strip Interactive Item */
+.date-strip-item {
+  @apply flex flex-col items-center justify-center p-3 min-w-[4rem] rounded-2xl transition-all duration-300 ease-in-out cursor-pointer hover:bg-slate-100 dark:hover:bg-white/10;
+}
+.date-strip-item.active {
+  @apply bg-primary text-primary-foreground shadow-lg shadow-primary/30 transform scale-105;
+}
+
+/* Quick Filter Pills (Paperpillar) */
+.filter-pill {
+  @apply px-4 py-1.5 rounded-full text-sm font-medium transition-all duration-300 ease-in-out border border-slate-200 dark:border-white/10 bg-white/50 dark:bg-black/40 hover:bg-slate-100 dark:hover:bg-white/20;
+}
+.filter-pill.active {
+  @apply bg-primary text-primary-foreground border-primary shadow-md;
+}
+
+/* Smooth modals for task sheets (framer-motion will be used, but adding base css class for sheets) */
+.bottom-sheet-modal {
+  @apply fixed bottom-0 left-0 right-0 z-50 bg-card rounded-t-3xl shadow-[0_-10px_40px_rgba(0,0,0,0.1)] border-t border-border overflow-hidden;
+}
+
+/* Floating Bottom Nav (Mobile) */
+.mobile-bottom-nav {
+  @apply fixed bottom-4 left-4 right-4 z-40 rounded-full bg-black/80 dark:bg-white/10 backdrop-blur-xl border border-white/20 shadow-2xl flex justify-around items-center py-3 px-2;
+}
+
+.mobile-nav-item {
+  @apply flex flex-col items-center p-2 rounded-full text-white/70 hover:text-white hover:bg-white/20 transition-all duration-300;
+}
+.mobile-nav-item.active {
+  @apply text-white bg-primary shadow-[0_0_15px_rgba(var(--primary),0.5)];
+}

@@ -1,0 +1,32 @@
+export const queryKeys = {
+  dashboard: ['dashboard'] as const,
+  events: {
+    all: ['events'] as const,
+    list: (params: unknown) => ['events', 'list', params] as const,
+    detail: (id: string) => ['events', 'detail', id] as const,
+    timeline: (id: string) => ['events', id, 'timeline'] as const,
+    summary: (id: string) => ['events', id, 'summary'] as const,
+  },
+  tasks: {
+    all: ['tasks'] as const,
+    list: (params: unknown) => ['tasks', 'list', params] as const,
+    detail: (id: string) => ['tasks', 'detail', id] as const,
+  },
+  people: {
+    all: ['people'] as const,
+    list: (params: unknown) => ['people', 'list', params] as const,
+  },
+  templates: ['templates'] as const,
+  checklist: (eventId?: string, taskId?: string) => ['checklist', eventId, taskId] as const,
+  comments: (eventId?: string, taskId?: string) => ['comments', eventId, taskId] as const,
+  notes: (eventId: string) => ['notes', eventId] as const,
+  attachments: (eventId?: string, taskId?: string) => ['attachments', eventId, taskId] as const,
+  activity: (eventId?: string) => ['activity', eventId] as const,
+  planner: (year: number) => ['planner', year] as const,
+  calendar: (from: string, to: string) => ['calendar', from, to] as const,
+  search: (q: string) => ['search', q] as const,
+  attention: ['attention'] as const,
+  tags: ['tags'] as const,
+  settings: ['settings'] as const,
+  notifications: ['notifications'] as const,
+};
