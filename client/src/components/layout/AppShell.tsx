@@ -5,7 +5,6 @@ import { Topbar } from './Topbar';
 import { MobileTabBar } from './MobileTabBar';
 import { CommandPalette } from '@/components/command-palette/CommandPalette';
 import { InstallAppBanner } from '@/components/shared/InstallAppBanner';
-import { NavigationTransitionOverlay } from './NavigationTransitionOverlay';
 
 export function AppShell() {
   const location = useLocation();
@@ -29,7 +28,6 @@ export function AppShell() {
       </div>
       <MobileTabBar />
       <CommandPalette />
-      <NavigationTransitionOverlay />
     </div>
   );
 }

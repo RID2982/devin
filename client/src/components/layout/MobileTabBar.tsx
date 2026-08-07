@@ -11,8 +11,6 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-import { useNavigationTransitionStore } from '@/stores/navigationTransitionStore';
-
 const PRIMARY_TABS = [
   { to: '/', label: 'Home', icon: LayoutDashboard, end: true },
   { to: '/events', label: 'Events', icon: PartyPopper },
@@ -32,7 +30,6 @@ export function MobileTabBar() {
   const location = useLocation();
   const navigate = useNavigate();
   const [moreOpen, setMoreOpen] = useState(false);
-  const startTransition = useNavigationTransitionStore((s) => s.startTransition);
 
   const isMoreActive = MORE_ITEMS.some((item) => location.pathname.startsWith(item.to));
 
@@ -47,10 +44,6 @@ export function MobileTabBar() {
             key={item.to}
             to={item.to}
             end={item.end}
-            onClick={(e) => {
-              e.preventDefault();
-              startTransition(item.to, e.currentTarget.getBoundingClientRect());
-            }}
             className="relative flex flex-1 flex-col items-center justify-center gap-0.5 py-2.5 text-[11px] font-medium"
           >
             {({ isActive }) => (
@@ -125,11 +118,7 @@ export function MobileTabBar() {
                   <NavLink
                     key={item.to}
                     to={item.to}
-                    onClick={(e) => {
-                      e.preventDefault();
-                      setMoreOpen(false);
-                      startTransition(item.to, e.currentTarget.getBoundingClientRect());
-                    }}
+                    onClick={() => setMoreOpen(false)}
                     className={({ isActive }) =>
                       cn(
                         'flex flex-col items-center gap-1.5 rounded-xl p-3 text-center text-xs font-medium',
