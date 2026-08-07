@@ -12,14 +12,13 @@ import { formatDate } from '@/lib/utils';
 import { EVENT_STATUSES } from '@app/shared';
 import { OverviewTab } from './tabs/OverviewTab';
 import { TasksTab } from './tabs/TasksTab';
-import { ChecklistTab } from './tabs/ChecklistTab';
 import { NotesTab } from './tabs/NotesTab';
 import { DocumentsTab } from './tabs/DocumentsTab';
 import { TimelineTab } from './tabs/TimelineTab';
 import { PeopleTab } from './tabs/PeopleTab';
 import { BudgetTab } from './tabs/BudgetTab';
 
-const TABS = ['overview', 'tasks', 'checklist', 'notes', 'documents', 'people', 'budget', 'timeline'] as const;
+const TABS = ['overview', 'tasks', 'notes', 'documents', 'people', 'budget', 'timeline'] as const;
 
 export function EventDetailPage() {
   const { id, tab = 'overview' } = useParams<{ id: string; tab?: string }>();
@@ -72,15 +71,14 @@ export function EventDetailPage() {
           </div>
 
           <Tabs value={activeTab} onValueChange={(v) => navigate(`/events/${id}/${v}`, { replace: true })}>
-            <TabsList className="flex-wrap bg-muted/60 p-1 rounded-xl">
-              <TabsTrigger value="overview">Overview</TabsTrigger>
-              <TabsTrigger value="tasks">Tasks</TabsTrigger>
-              <TabsTrigger value="checklist">Checklist</TabsTrigger>
-              <TabsTrigger value="notes">Notes</TabsTrigger>
-              <TabsTrigger value="documents">Documents</TabsTrigger>
-              <TabsTrigger value="people">People</TabsTrigger>
-              <TabsTrigger value="budget">Budget</TabsTrigger>
-              <TabsTrigger value="timeline">Timeline & Activity</TabsTrigger>
+            <TabsList className="flex-wrap bg-muted/65 p-1 rounded-xl">
+              <TabsTrigger value="overview" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground font-semibold rounded-lg">Overview</TabsTrigger>
+              <TabsTrigger value="tasks" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground font-semibold rounded-lg">Tasks & Checklist</TabsTrigger>
+              <TabsTrigger value="notes" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground font-semibold rounded-lg">Notes</TabsTrigger>
+              <TabsTrigger value="documents" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground font-semibold rounded-lg">Documents</TabsTrigger>
+              <TabsTrigger value="people" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground font-semibold rounded-lg">People</TabsTrigger>
+              <TabsTrigger value="budget" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground font-semibold rounded-lg">Budget</TabsTrigger>
+              <TabsTrigger value="timeline" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground font-semibold rounded-lg">Timeline & Activity</TabsTrigger>
             </TabsList>
 
             <div className="mt-4 rounded-2xl border border-border/80 bg-card p-4 shadow-sm min-h-[350px]">
@@ -94,7 +92,6 @@ export function EventDetailPage() {
                 >
                   {activeTab === 'overview' && <OverviewTab event={event} />}
                   {activeTab === 'tasks' && <TasksTab eventId={event.id} />}
-                  {activeTab === 'checklist' && <ChecklistTab eventId={event.id} />}
                   {activeTab === 'notes' && <NotesTab eventId={event.id} />}
                   {activeTab === 'documents' && <DocumentsTab eventId={event.id} />}
                   {activeTab === 'people' && <PeopleTab eventId={event.id} />}

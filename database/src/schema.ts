@@ -66,6 +66,7 @@ export const events = pgTable('events', {
   time: varchar('time', { length: 20 }),
   venue: varchar('venue', { length: 255 }),
   budget: numeric('budget', { precision: 12, scale: 2 }),
+  expenses: jsonb('expenses').default([]),
   status: eventStatusEnum('status').notNull().default('Planning'),
   priority: priorityEnum('priority').notNull().default('Medium'),
   color: varchar('color', { length: 20 }).default('#b42244'),

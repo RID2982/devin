@@ -33,3 +33,11 @@ export function useUpdateNote(eventId: string) {
     onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.notes(eventId) }),
   });
 }
+
+export function useDeleteNote(eventId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => apiClient.delete(`/notes/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.notes(eventId) }),
+  });
+}

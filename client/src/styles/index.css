@@ -121,3 +121,10 @@ body {
 .animate-float-slower {
   animation: float-slower 9s ease-in-out infinite;
 }
+
+/* Invert default Webkit calendar picker icon color to white in dark mode */
+.dark ::-webkit-calendar-picker-indicator {
+  filter: invert(1);
+  cursor: pointer;
+}
+

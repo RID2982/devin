@@ -12,6 +12,7 @@ export interface EventRecord {
   time: string | null;
   venue: string | null;
   budget: string | null;
+  expenses: Array<{ id: string; name: string; amount: number; category?: string; date: string }> | null;
   status: string;
   priority: string;
   color: string | null;
