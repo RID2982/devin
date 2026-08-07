@@ -104,8 +104,8 @@ export function CalendarPage() {
             onNavigate={setDate}
             onView={setView}
             views={['month', 'week', 'day', 'agenda']}
-            step={15}
-            timeslots={4}
+            step={30}
+            timeslots={2}
             selectable
             onSelectSlot={(slotInfo) => {
               setDate(slotInfo.start);

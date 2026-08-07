@@ -108,20 +108,46 @@
 }
 
 .rbc-time-header-content {
-  border-left: 1px solid hsl(var(--border));
+  border-left: 1px solid hsl(var(--border) / 0.3);
 }
 
 .rbc-time-content {
-  border-top: 1px solid hsl(var(--border));
+  border-top: 1px solid hsl(var(--border) / 0.3);
+}
+
+.rbc-time-content > * + * > * {
+  border-left: 1px solid hsl(var(--border) / 0.3);
 }
 
 .rbc-timeslot-group {
-  min-height: 48px;
-  border-bottom: 1px solid hsl(var(--border) / 0.5);
+  min-height: 54px;
+  border-bottom: 1px solid hsl(var(--border) / 0.3);
+}
+
+.rbc-day-slot .rbc-time-slot {
+  border-top: 1px solid hsl(var(--border) / 0.1);
+}
+
+.rbc-day-slot .rbc-time-slot:first-child {
+  border-top: none;
+}
+
+.rbc-time-gutter .rbc-time-slot {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: hsl(var(--muted-foreground));
+}
+
+.dark .rbc-day-slot .rbc-time-slot {
+  border-top: 1px solid hsl(var(--border) / 0.12);
+}
+
+.dark .rbc-timeslot-group {
+  border-bottom: 1px solid hsl(var(--border) / 0.35);
 }
 
 .rbc-agenda-view table.rbc-agenda-table tbody > tr > td {
   padding: 10px 12px;
-  border-bottom: 1px solid hsl(var(--border));
+  border-bottom: 1px solid hsl(var(--border) / 0.3);
   font-size: 0.875rem;
 }
