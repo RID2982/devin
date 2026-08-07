@@ -20,6 +20,8 @@ import { usePwaInstall } from '@/hooks/usePwaInstall';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 
+import { useNavigationTransitionStore } from '@/stores/navigationTransitionStore';
+
 const NAV_ITEMS = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
   { to: '/planner', label: 'Monthly Planner', icon: CalendarRange },
@@ -38,6 +40,7 @@ export function Sidebar() {
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
   const { installApp, isInstallable } = usePwaInstall();
+  const startTransition = useNavigationTransitionStore((s) => s.startTransition);
 
   // sidebarCollapsed = pinned-closed preference. Hovering always temporarily reveals labels.
   const expanded = !sidebarCollapsed || hovering;
@@ -68,18 +71,22 @@ export function Sidebar() {
         </AnimatePresence>
       </div>
 
-      <nav className="flex-1 space-y-0.5 overflow-x-hidden overflow-y-auto p-2">
+      <nav className="flex-1 space-y-3 overflow-x-hidden overflow-y-auto p-3">
         {NAV_ITEMS.map((item) => (
           <NavLink
             key={item.to}
             to={item.to}
             end={item.end}
+            onClick={(e) => {
+              e.preventDefault();
+              startTransition(item.to, e.currentTarget.getBoundingClientRect());
+            }}
             className={({ isActive }) =>
               cn(
-                'group flex items-center gap-3 rounded-lg px-3.5 py-2.5 text-sm font-medium transition-colors',
+                'group flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-bold transition-all duration-300 border shadow-sm',
                 isActive
-                  ? 'bg-primary/10 text-primary'
-                  : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+                  ? 'bg-primary/10 text-primary border-primary/20 shadow-md hover:bg-primary/15'
+                  : 'bg-card/40 border-border/50 text-muted-foreground hover:bg-muted hover:text-foreground hover:border-border/80',
               )
             }
             title={!expanded ? item.label : undefined}
