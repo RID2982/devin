@@ -40,7 +40,7 @@ async function main() {
   }
 
   console.log('Seeding admin user...');
-  const adminEmail = process.env.ADMIN_EMAIL ?? 'admin@clubops.local';
+  const adminEmail = process.env.ADMIN_EMAIL ?? 'admin@gmail.com';
   const [owner] = await db
     .insert(appUsers)
     .values({ email: adminEmail, name: 'Club Admin' })
