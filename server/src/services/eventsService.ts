@@ -1,4 +1,4 @@
-import { and, count, desc, eq } from 'drizzle-orm';
+import { and, count, desc, eq, ne } from 'drizzle-orm';
 import { DEFAULT_EVENT_CHECKLIST } from '@app/shared';
 import { db, schema } from '../lib/db';
 import { AppError } from '../lib/AppError';
@@ -66,6 +66,13 @@ export async function update(id: string, input: UpdateEventInput, actorUserId?: 
     ...input,
     budget: input.budget !== undefined ? input.budget.toString() : undefined,
   });
+
+  if (input.status === 'Completed' || input.status === 'Cancelled') {
+    await db.update(tasks)
+      .set({ status: 'Cancelled', updatedAt: new Date() })
+      .where(and(eq(tasks.eventId, id), ne(tasks.status, 'Completed')));
+  }
+
   await activityLogService.record({
     action: 'EVENT_UPDATED',
     summary: `Event "${event.name}" was updated`,
