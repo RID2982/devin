@@ -54,22 +54,32 @@ export function EventDetailPage() {
         <ArrowLeft className="h-4 w-4" /> Back to Events
       </Button>
 
-      <div className="w-full space-y-4">
-        {/* Left Area: Event Workspace Tabs */}
-        <div className="space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-4 w-full border-b border-border/40 pb-4">
-            <div className="flex items-center gap-3">
-              <span className="h-4 w-4 shrink-0 rounded-full" style={{ backgroundColor: event.color ?? '#b42244' }} />
-              <div>
-                <h1 className="text-2xl font-bold tracking-tight text-foreground">{event.name}</h1>
-                <p className="text-sm text-muted-foreground">
-                  {event.category ? `${event.category} · ` : ''}
-                  {formatDate(event.date)}
-                </p>
+      <div className="w-full space-y-6">
+        {/* Premium Boxed Event Header Card */}
+        <div className="relative overflow-hidden rounded-3xl border border-border/80 bg-gradient-to-br from-card via-card to-muted/20 p-5 md:p-6 shadow-md">
+          {/* Subtle glow background */}
+          <div className="absolute -right-20 -top-20 h-48 w-48 rounded-full bg-primary/5 blur-3xl" />
+          
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-5 relative z-10">
+            {/* Left side: Color, Title, Category, Date */}
+            <div className="flex items-start gap-4">
+              <span className="h-5 w-5 shrink-0 rounded-full border border-white/20 shadow-sm mt-1.5" style={{ backgroundColor: event.color ?? '#b42244' }} />
+              <div className="space-y-1">
+                <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-foreground">{event.name}</h1>
+                <div className="flex flex-wrap items-center gap-2 text-xs font-bold text-muted-foreground uppercase">
+                  {event.category && (
+                    <span className="bg-primary/10 text-primary px-2.5 py-0.5 rounded-full">
+                      {event.category}
+                    </span>
+                  )}
+                  <span>•</span>
+                  <span>{formatDate(event.date)}</span>
+                </div>
               </div>
             </div>
 
-            <div className="flex items-center gap-3 shrink-0">
+            {/* Right side: Interactive status picker and delete option */}
+            <div className="flex items-center gap-3 self-end md:self-center">
               <div className="flex items-center gap-2">
                 <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Status:</span>
                 <Select value={event.status} onValueChange={handleStatusChange} disabled={updateEvent.isPending}>
@@ -96,6 +106,10 @@ export function EventDetailPage() {
               </Button>
             </div>
           </div>
+        </div>
+
+        {/* Left Area: Event Workspace Tabs */}
+        <div className="space-y-4">
 
           <Tabs value={activeTab} onValueChange={(v) => navigate(`/events/${id}/${v}`, { replace: true })}>
             <TabsList className="flex-wrap bg-muted/65 p-1 rounded-xl">
