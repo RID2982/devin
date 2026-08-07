@@ -1,6 +1,6 @@
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft } from 'lucide-react';
-import { useEventQuery } from '@/features/events/useEvents';
+import { ArrowLeft, Trash2 } from 'lucide-react';
+import { useEventQuery, useDeleteEvent } from '@/features/events/useEvents';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { StatusBadge } from '@/components/shared/StatusBadge';
@@ -22,6 +22,7 @@ export function EventDetailPage() {
   const { id, tab = 'overview' } = useParams<{ id: string; tab?: string }>();
   const navigate = useNavigate();
   const { data: event, isLoading } = useEventQuery(id);
+  const deleteEvent = useDeleteEvent();
 
   if (isLoading || !event) {
     return (
@@ -33,6 +34,14 @@ export function EventDetailPage() {
   }
 
   const activeTab = TABS.includes(tab as (typeof TABS)[number]) ? tab : 'overview';
+
+  const handleDelete = () => {
+    if (confirm(`Are you sure you want to permanently delete "${event.name}"? This will remove all associated tasks, checklist items, and documents.`)) {
+      deleteEvent.mutate(event.id, {
+        onSuccess: () => navigate('/events'),
+      });
+    }
+  };
 
   return (
     <div className="space-y-4">
@@ -55,6 +64,14 @@ export function EventDetailPage() {
         <div className="flex items-center gap-2">
           <PriorityBadge priority={event.priority} />
           <StatusBadge status={event.status} kind="event" />
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleDelete}
+            className="text-destructive hover:bg-destructive/10 hover:text-destructive border-destructive/20 gap-1.5"
+          >
+            <Trash2 className="h-3.5 w-3.5" /> Delete Event
+          </Button>
         </div>
       </div>
 

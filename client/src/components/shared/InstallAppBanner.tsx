@@ -47,7 +47,7 @@ export function InstallAppBanner() {
             <Download className="h-4 w-4" />
           </div>
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-semibold">Install ClubOps</p>
+            <p className="text-sm font-semibold">Install Rotaract Club of Salem Midtown</p>
             <p className="text-xs text-white/80">Add it to your home screen for quick, app-like access.</p>
           </div>
           <Button size="sm" variant="outline" onClick={handleInstall} className="shrink-0 border-white/40 bg-white/10 text-white hover:bg-white/20">
@@ -76,7 +76,7 @@ export function InstallAppBanner() {
               </p>
               <p className="flex items-center gap-2">
                 <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold">3</span>
-                Tap <span className="font-medium">Add</span> — ClubOps now opens full-screen from your home screen
+                Tap <span className="font-medium">Add</span> — Rotaract Club of Salem Midtown now opens full-screen from your home screen
               </p>
             </motion.div>
           )}

@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
 import { PRIORITIES, EVENT_STATUSES } from '@app/shared';
@@ -21,13 +22,37 @@ interface FormValues {
   templateId: string;
 }
 
-export function CreateEventDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
+export function CreateEventDialog({
+  open,
+  onOpenChange,
+  defaultDate,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  defaultDate?: string;
+}) {
   const navigate = useNavigate();
   const createEvent = useCreateEvent();
   const { data: templates } = useTemplatesQuery();
   const { register, handleSubmit, control, reset, formState } = useForm<FormValues>({
-    defaultValues: { priority: 'Medium', status: 'Planning' },
+    defaultValues: { priority: 'Medium', status: 'Planning', date: defaultDate },
   });
+
+  useEffect(() => {
+    if (open) {
+      reset({
+        priority: 'Medium',
+        status: 'Planning',
+        date: defaultDate || new Date().toISOString().slice(0, 10),
+        name: '',
+        category: '',
+        venue: '',
+        budget: '',
+        description: '',
+        templateId: '',
+      });
+    }
+  }, [open, defaultDate, reset]);
 
   async function onSubmit(values: FormValues) {
     const event = await createEvent.mutateAsync({

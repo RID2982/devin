@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { Plus } from 'lucide-react';
-import { usePeopleQuery, useCreatePerson } from '@/features/people/usePeople';
+import { Plus, Trash2 } from 'lucide-react';
+import { usePeopleQuery, useCreatePerson, useDeletePerson } from '@/features/people/usePeople';
 import { Card, CardContent } from '@/components/ui/card';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -23,6 +23,7 @@ interface FormValues {
 export function PeoplePage() {
   const { data, isLoading } = usePeopleQuery({ pageSize: 100 });
   const createPerson = useCreatePerson();
+  const deletePerson = useDeletePerson();
   const [open, setOpen] = useState(false);
   const { register, handleSubmit, reset, formState } = useForm<FormValues>();
 
@@ -31,6 +32,12 @@ export function PeoplePage() {
     reset();
     setOpen(false);
   }
+
+  const handleDelete = (id: string, name: string) => {
+    if (confirm(`Are you sure you want to permanently delete "${name}" from the people directory?`)) {
+      deletePerson.mutate(id);
+    }
+  };
 
   return (
     <div className="space-y-4">
@@ -56,17 +63,27 @@ export function PeoplePage() {
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {data.data.map((p) => (
             <Card key={p.id}>
-              <CardContent className="flex items-center gap-3 p-4">
-                <Avatar className="h-10 w-10">
-                  <AvatarFallback>{p.name.slice(0, 2).toUpperCase()}</AvatarFallback>
-                </Avatar>
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-medium">{p.name}</p>
-                  <p className="truncate text-xs text-muted-foreground">{p.role || p.email || '—'}</p>
-                  {p.skills && p.skills.length > 0 && (
-                    <p className="mt-0.5 truncate text-xs text-muted-foreground">{p.skills.join(', ')}</p>
-                  )}
+              <CardContent className="flex items-center justify-between p-4 gap-3">
+                <div className="flex items-center gap-3 min-w-0">
+                  <Avatar className="h-10 w-10 shrink-0">
+                    <AvatarFallback>{p.name.slice(0, 2).toUpperCase()}</AvatarFallback>
+                  </Avatar>
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-foreground">{p.name}</p>
+                    <p className="truncate text-xs text-muted-foreground">{p.role || p.email || '—'}</p>
+                    {p.skills && p.skills.length > 0 && (
+                      <p className="mt-0.5 truncate text-[10px] text-muted-foreground">{p.skills.join(', ')}</p>
+                    )}
+                  </div>
                 </div>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="text-destructive hover:bg-destructive/10 hover:text-destructive h-8 w-8 rounded-lg shrink-0"
+                  onClick={() => handleDelete(p.id, p.name)}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
               </CardContent>
             </Card>
           ))}

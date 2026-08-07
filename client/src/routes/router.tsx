@@ -18,10 +18,8 @@ const EventsListPage = lazy(() => import('@/pages/events/EventsListPage').then((
 const EventDetailPage = lazy(() => import('@/pages/events/EventDetailPage').then((m) => ({ default: m.EventDetailPage })));
 const TasksPage = lazy(() => import('@/pages/tasks/TasksPage').then((m) => ({ default: m.TasksPage })));
 const PeoplePage = lazy(() => import('@/pages/people/PeoplePage').then((m) => ({ default: m.PeoplePage })));
-const TemplatesPage = lazy(() => import('@/pages/templates/TemplatesPage').then((m) => ({ default: m.TemplatesPage })));
 const CalendarPage = lazy(() => import('@/pages/calendar/CalendarPage').then((m) => ({ default: m.CalendarPage })));
 const SearchPage = lazy(() => import('@/pages/search/SearchPage').then((m) => ({ default: m.SearchPage })));
-const ReportsPage = lazy(() => import('@/pages/reports/ReportsPage').then((m) => ({ default: m.ReportsPage })));
 const SettingsPage = lazy(() => import('@/pages/settings/SettingsPage').then((m) => ({ default: m.SettingsPage })));
 
 export const router = createBrowserRouter([
@@ -40,10 +38,10 @@ export const router = createBrowserRouter([
           { path: '/events/:id/:tab', element: withSuspense(EventDetailPage) },
           { path: '/tasks', element: withSuspense(TasksPage) },
           { path: '/people', element: withSuspense(PeoplePage) },
-          { path: '/templates', element: withSuspense(TemplatesPage) },
+          { path: '/templates', element: withSuspense(DashboardPage) },
           { path: '/calendar', element: withSuspense(CalendarPage) },
           { path: '/search', element: withSuspense(SearchPage) },
-          { path: '/reports', element: withSuspense(ReportsPage) },
+          { path: '/reports', element: withSuspense(DashboardPage) },
           { path: '/settings', element: withSuspense(SettingsPage) },
         ],
       },

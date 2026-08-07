@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { StatusBadge } from '@/components/shared/StatusBadge';
 import { PriorityBadge } from '@/components/shared/PriorityBadge';
 import { formatDate } from '@/lib/utils';
+import { CreateEventDialog } from '@/features/events/CreateEventDialog';
 import '@/styles/calendar-overrides.css';
 
 const localizer = dateFnsLocalizer({
@@ -34,6 +35,8 @@ export function CalendarPage() {
   const [view, setView] = useState<View>('month');
   const [filterType, setFilterType] = useState<'all' | 'event' | 'task'>('all');
   const [selected, setSelected] = useState<CalendarItem | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [defaultDate, setDefaultDate] = useState<string | undefined>(undefined);
   const navigate = useNavigate();
 
   const range = useMemo(() => ({ from: swk(startOfMonth(date)), to: endOfWeek(endOfMonth(date)) }), [date]);
@@ -111,6 +114,9 @@ export function CalendarPage() {
               setDate(slotInfo.start);
               if (view === 'month') {
                 setView('day');
+              } else {
+                setDefaultDate(format(slotInfo.start, 'yyyy-MM-dd'));
+                setCreateOpen(true);
               }
             }}
             style={{ height: 640 }}
@@ -180,6 +186,8 @@ export function CalendarPage() {
           )}
         </DialogContent>
       </Dialog>
+
+      <CreateEventDialog open={createOpen} onOpenChange={setCreateOpen} defaultDate={defaultDate} />
     </div>
   );
 }

@@ -48,3 +48,14 @@ export function useArchivePerson() {
     onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.people.all }),
   });
 }
+
+export function useDeletePerson() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => apiClient.delete(`/people/${id}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.people.all });
+      qc.invalidateQueries({ queryKey: queryKeys.dashboard });
+    },
+  });
+}

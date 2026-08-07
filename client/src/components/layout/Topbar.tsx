@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Search, Moon, Sun, Command as CommandIcon, Plus, LogOut, X } from 'lucide-react';
+import { Search, Moon, Sun, Command as CommandIcon, Plus, LogOut, X, PartyPopper, CheckSquare, FileText } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -14,10 +14,12 @@ import { Logo } from '@/components/shared/Logo';
 import { LOGO_SRC } from '@/config/brand';
 import { Breadcrumbs } from './Breadcrumbs';
 import { Smartphone } from 'lucide-react';
+import { TemplateDialog } from './TemplateDialog';
 
 export function Topbar() {
   const [query, setQuery] = useState('');
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
+  const [templateOpen, setTemplateOpen] = useState(false);
   const navigate = useNavigate();
   const { theme, setTheme } = useUiStore();
   const { toggle } = useCommandPaletteStore();
@@ -41,10 +43,10 @@ export function Topbar() {
   const initials = (user?.name ?? user?.email ?? '?').slice(0, 2).toUpperCase();
 
   return (
-    <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-border bg-card/80 px-4 backdrop-blur">
+    <header className="sticky top-3 z-30 flex h-14 items-center gap-3 rounded-2xl border border-border bg-card/85 px-4 shadow-lg backdrop-blur-md m-3 mb-3">
       {/* Mobile: logo mark + page context */}
       <div className="flex items-center gap-2 lg:hidden">
-        <Logo src={LOGO_SRC} className="h-7 w-7" iconOnly />
+        <Logo src={LOGO_SRC} className="h-7 w-7 shrink-0" />
       </div>
 
       <div className="hidden lg:block">
@@ -67,9 +69,25 @@ export function Topbar() {
         <CommandIcon className="h-3.5 w-3.5" /> K
       </Button>
 
-      <Button size="sm" onClick={() => navigate('/events?create=1')} className="hidden gap-1.5 lg:inline-flex">
-        <Plus className="h-4 w-4" /> Quick Add
-      </Button>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button size="sm" className="brand-gradient text-white border-0 shadow-sm hidden gap-1.5 lg:inline-flex font-semibold">
+            <Plus className="h-4 w-4" /> + New
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-48">
+          <DropdownMenuItem onSelect={() => navigate('/events?create=1')}>
+            <PartyPopper className="mr-2 h-4 w-4 text-primary" /> New Event
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => navigate('/tasks?create=1')}>
+            <CheckSquare className="mr-2 h-4 w-4 text-primary" /> New Task
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onSelect={() => setTemplateOpen(true)}>
+            <FileText className="mr-2 h-4 w-4 text-primary" /> Proposal & Template
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
 
       {/* Mobile: icon-only search trigger */}
       <Button variant="ghost" size="icon" onClick={() => setMobileSearchOpen(true)} className="ml-auto lg:hidden">
@@ -129,6 +147,8 @@ export function Topbar() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      <TemplateDialog open={templateOpen} onOpenChange={setTemplateOpen} />
     </header>
   );
 }

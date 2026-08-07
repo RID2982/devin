@@ -102,6 +102,18 @@ export function useArchiveEvent() {
   });
 }
 
+export function useDeleteEvent() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => apiClient.delete(`/events/${id}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.events.all });
+      qc.invalidateQueries({ queryKey: queryKeys.dashboard });
+      qc.invalidateQueries({ queryKey: ['planner'] });
+    },
+  });
+}
+
 export function useRestoreEvent() {
   const qc = useQueryClient();
   return useMutation({

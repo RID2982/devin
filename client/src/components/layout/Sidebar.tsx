@@ -7,12 +7,8 @@ import {
   PartyPopper,
   ListChecks,
   Users,
-  FileStack,
   Calendar,
-  BarChart3,
   Settings,
-  Pin,
-  PinOff,
 } from 'lucide-react';
 import { useUiStore } from '@/stores/uiStore';
 import { Logo } from '@/components/shared/Logo';
@@ -25,9 +21,7 @@ const NAV_ITEMS = [
   { to: '/events', label: 'Events', icon: PartyPopper },
   { to: '/tasks', label: 'Tasks', icon: ListChecks },
   { to: '/people', label: 'People', icon: Users },
-  { to: '/templates', label: 'Templates', icon: FileStack },
   { to: '/calendar', label: 'Calendar', icon: Calendar },
-  { to: '/reports', label: 'Reports', icon: BarChart3 },
   { to: '/settings', label: 'Settings', icon: Settings },
 ];
 
@@ -35,7 +29,7 @@ const COLLAPSED_WIDTH = 72;
 const EXPANDED_WIDTH = 252;
 
 export function Sidebar() {
-  const { sidebarCollapsed, toggleSidebar } = useUiStore();
+  const { sidebarCollapsed } = useUiStore();
   const [hovering, setHovering] = useState(false);
 
   // sidebarCollapsed = pinned-closed preference. Hovering always temporarily reveals labels.
@@ -47,10 +41,10 @@ export function Sidebar() {
       onMouseLeave={() => setHovering(false)}
       animate={{ width: expanded ? EXPANDED_WIDTH : COLLAPSED_WIDTH }}
       transition={{ type: 'tween', duration: 0.22, ease: 'easeInOut' }}
-      className="sticky top-0 z-20 hidden h-screen shrink-0 flex-col overflow-hidden border-r border-border bg-card lg:flex"
+      className="sticky top-3 left-3 z-20 hidden h-[calc(100vh-24px)] shrink-0 flex-col overflow-hidden rounded-2xl border border-border bg-card/85 shadow-lg backdrop-blur-md lg:flex m-3 mr-0"
     >
       <div className="flex h-14 items-center gap-2.5 border-b border-border px-4">
-        <Logo src={LOGO_SRC} className="h-8 w-8 shrink-0" iconOnly />
+        <Logo src={LOGO_SRC} className="h-8 w-8 shrink-0" />
         <AnimatePresence>
           {expanded && (
             <motion.span
@@ -60,7 +54,7 @@ export function Sidebar() {
               transition={{ duration: 0.15 }}
               className="truncate text-sm font-semibold"
             >
-              ClubOps
+              Rotaract Club of Salem Midtown
             </motion.span>
           )}
         </AnimatePresence>
@@ -99,25 +93,6 @@ export function Sidebar() {
           </NavLink>
         ))}
       </nav>
-
-      <button
-        onClick={toggleSidebar}
-        className="flex h-11 items-center justify-center gap-2 border-t border-border text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-      >
-        {sidebarCollapsed ? <Pin className="h-4 w-4" /> : <PinOff className="h-4 w-4" />}
-        <AnimatePresence>
-          {expanded && (
-            <motion.span
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.15 }}
-            >
-              {sidebarCollapsed ? 'Pin open' : 'Unpin'}
-            </motion.span>
-          )}
-        </AnimatePresence>
-      </button>
     </motion.aside>
   );
 }

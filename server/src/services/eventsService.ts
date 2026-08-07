@@ -8,7 +8,7 @@ import { eventsRepository } from '../repositories/eventsRepository';
 import { activityLogService } from './activityLogService';
 import type { CreateEventInput, UpdateEventInput } from '../validators/events.schema';
 
-const { checklistItems, checklistTemplates, templateItems, activityLogs, eventPeople, people } = schema;
+const { checklistItems, checklistTemplates, templateItems, activityLogs, eventPeople, people, tasks } = schema;
 
 export async function list(query: ListQuery) {
   const { rows, total } = await eventsRepository.list(query);
@@ -78,6 +78,7 @@ export async function update(id: string, input: UpdateEventInput, actorUserId?: 
 export async function archive(id: string, actorUserId?: string) {
   const event = await getById(id);
   const updated = await eventsRepository.setArchived(id, true);
+  await db.update(tasks).set({ archivedAt: new Date(), updatedAt: new Date() }).where(eq(tasks.eventId, id));
   await activityLogService.record({
     action: 'EVENT_ARCHIVED',
     summary: `Event "${event.name}" was archived`,
@@ -90,6 +91,7 @@ export async function archive(id: string, actorUserId?: string) {
 export async function restore(id: string, actorUserId?: string) {
   const event = await getById(id);
   const updated = await eventsRepository.setArchived(id, false);
+  await db.update(tasks).set({ archivedAt: null, updatedAt: new Date() }).where(eq(tasks.eventId, id));
   await activityLogService.record({
     action: 'EVENT_RESTORED',
     summary: `Event "${event.name}" was restored`,

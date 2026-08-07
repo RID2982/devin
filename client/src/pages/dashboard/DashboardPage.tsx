@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
+import { apiClient } from '@/lib/api';
 import {
   PartyPopper,
   ListChecks,
@@ -8,12 +10,16 @@ import {
   AlertTriangle,
   Plus,
   Activity as ActivityIcon,
+  BarChart3,
+  Download,
+  UserCheck,
 } from 'lucide-react';
 import { useDashboardQuery } from '@/features/dashboard/useDashboard';
 import { StatusBadge } from '@/components/shared/StatusBadge';
 import { PriorityBadge } from '@/components/shared/PriorityBadge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { formatDate, formatDateTime } from '@/lib/utils';
@@ -21,9 +27,30 @@ import { DateStrip } from '@/components/dashboard/DateStrip';
 import { MetricCard } from '@/components/dashboard/MetricCard';
 import { AttentionSection } from '@/components/dashboard/AttentionSection';
 
+interface MonthlyReport {
+  month: string;
+  events: Array<{ id: string; name: string; status: string }>;
+  totals: { events: number; tasks: number; completedTasks: number; pendingTasks: number };
+}
+
+interface ProductivityReport {
+  byPerson: Array<{ personId: string; personName: string; completed: number }>;
+}
+
 export function DashboardPage() {
   const { data, isLoading } = useDashboardQuery();
   const [selectedDate, setSelectedDate] = useState(new Date());
+  const [reportMonth, setReportMonth] = useState(() => new Date().toISOString().slice(0, 7));
+
+  const { data: monthlyReport } = useQuery({
+    queryKey: ['reports', 'monthly', reportMonth],
+    queryFn: () => apiClient.get<MonthlyReport>(`/reports/monthly?month=${reportMonth}`),
+  });
+
+  const { data: productivityReport } = useQuery({
+    queryKey: ['reports', 'productivity'],
+    queryFn: () => apiClient.get<ProductivityReport>('/reports/productivity'),
+  });
 
   if (isLoading || !data) {
     return (
@@ -202,6 +229,80 @@ export function DashboardPage() {
             )}
           </CardContent>
         </Card>
+      </div>
+
+      {/* Reports & Member Performance Summary (Embedded) */}
+      <div className="rounded-2xl border border-border bg-card p-5 shadow-sm space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border/60 pb-3">
+          <div>
+            <h2 className="text-lg font-bold tracking-tight text-foreground flex items-center gap-2">
+              <BarChart3 className="h-5 w-5 text-primary" /> Reports & Club Performance
+            </h2>
+            <p className="text-xs text-muted-foreground">Monthly breakdown of events, completed tasks, and member contributions.</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Input
+              type="month"
+              value={reportMonth}
+              onChange={(e) => setReportMonth(e.target.value)}
+              className="h-8 w-40 text-xs rounded-lg"
+            />
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 text-xs gap-1"
+              onClick={() => window.open(`${import.meta.env.VITE_API_URL || '/api/v1'}/reports/export/monthly-csv?month=${reportMonth}`, '_blank')}
+            >
+              <Download className="h-3.5 w-3.5" /> CSV
+            </Button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          {/* Monthly Totals Breakdown */}
+          <div className="space-y-3">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Monthly Summary ({reportMonth})</h3>
+            <div className="grid grid-cols-2 gap-3 text-sm">
+              <div className="rounded-xl border border-border/60 bg-muted/40 p-3">
+                <p className="text-xs text-muted-foreground font-medium">Events Scheduled</p>
+                <p className="text-xl font-extrabold text-foreground">{monthlyReport?.totals.events ?? '—'}</p>
+              </div>
+              <div className="rounded-xl border border-border/60 bg-muted/40 p-3">
+                <p className="text-xs text-muted-foreground font-medium">Total Tasks</p>
+                <p className="text-xl font-extrabold text-foreground">{monthlyReport?.totals.tasks ?? '—'}</p>
+              </div>
+              <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3">
+                <p className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">Completed Tasks</p>
+                <p className="text-xl font-extrabold text-emerald-700 dark:text-emerald-300">{monthlyReport?.totals.completedTasks ?? '—'}</p>
+              </div>
+              <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-3">
+                <p className="text-xs text-amber-600 dark:text-amber-400 font-medium">Pending Tasks</p>
+                <p className="text-xl font-extrabold text-amber-700 dark:text-amber-300">{monthlyReport?.totals.pendingTasks ?? '—'}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Member Productivity Ranking */}
+          <div className="space-y-3">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+              <UserCheck className="h-4 w-4 text-primary" /> Member Performance Leaderboard
+            </h3>
+            <div className="rounded-xl border border-border/60 bg-muted/20 p-3.5 space-y-2 max-h-48 overflow-y-auto">
+              {productivityReport?.byPerson.length ? (
+                productivityReport.byPerson
+                  .sort((a, b) => b.completed - a.completed)
+                  .map((p, idx) => (
+                    <div key={p.personId} className="flex items-center justify-between text-xs p-2 rounded-lg bg-card border border-border/50">
+                      <span className="font-semibold text-foreground">{idx + 1}. {p.personName}</span>
+                      <span className="rounded-full bg-primary/10 px-2 py-0.5 font-bold text-primary">{p.completed} completed</span>
+                    </div>
+                  ))
+              ) : (
+                <p className="text-xs text-muted-foreground py-2 text-center">No completed tasks assigned to members yet.</p>
+              )}
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );

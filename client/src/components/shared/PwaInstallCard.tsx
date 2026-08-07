@@ -44,7 +44,7 @@ export function PwaInstallCard({ className = '' }: { className?: string }) {
               <h3 className="font-semibold text-foreground text-sm">Install Mobile App</h3>
               <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-bold text-primary">PWA</span>
             </div>
-            <p className="text-xs text-muted-foreground mt-0.5">Access ClubOps directly on your mobile home screen.</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Access Rotaract Club of Salem Midtown directly on your mobile home screen.</p>
           </div>
         </div>
       </div>

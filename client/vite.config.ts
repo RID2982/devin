@@ -20,7 +20,7 @@ export default defineConfig({
       includeAssets: ['favicon.svg', 'icons/apple-touch-icon.png'],
       manifest: {
         name: 'Rotaract Club of Salem Midtown — Dream to Deserve',
-        short_name: 'ClubOps',
+        short_name: 'Rotaract Club of Salem Midtown',
         description: 'Month-wise event & task management for club operations.',
         theme_color: '#b42244',
         background_color: '#fdfaf9',
@@ -36,6 +36,7 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,png,ico}'],
+        maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
       },
     }),
   ],

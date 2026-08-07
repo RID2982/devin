@@ -7,6 +7,8 @@ import { Button } from '@/components/ui/button';
 import { useUiStore } from '@/stores/uiStore';
 import { useSettingsQuery, useUpdateSettings } from '@/features/settings/useSettings';
 import { usePwaInstall } from '@/hooks/usePwaInstall';
+import { useAuth } from '@/auth/AuthProvider';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
 
 const ACCENT_OPTIONS = ['#b42244', '#c9a227', '#1b2a5e', '#10b981', '#0ea5e9', '#8b5cf6'];
@@ -14,18 +16,42 @@ const ACCENT_OPTIONS = ['#b42244', '#c9a227', '#1b2a5e', '#10b981', '#0ea5e9', '
 export function SettingsPage() {
   const { theme, setTheme, accentColor, setAccentColor } = useUiStore();
   const { data: settings } = useSettingsQuery();
+  const { user } = useAuth();
   const updateSettings = useUpdateSettings();
   const { canInstall, isIos, isInstalled, promptInstall } = usePwaInstall();
   const [showIosSteps, setShowIosSteps] = useState(false);
 
   const notificationPrefs = (settings?.notificationPreferences as { email: boolean; inApp: boolean }) ?? { email: true, inApp: true };
+  const initials = (user?.name ?? user?.email ?? '?').slice(0, 2).toUpperCase();
 
   return (
     <div className="max-w-2xl space-y-4">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
-        <p className="text-sm text-muted-foreground">Customize the look and notifications.</p>
+        <p className="text-sm text-muted-foreground">Customize your profile, look, and notifications.</p>
       </div>
+
+      {/* Admin Profile Details Card */}
+      <Card className="rounded-2xl border-border shadow-sm">
+        <CardHeader className="pb-3">
+          <CardTitle>Profile Details</CardTitle>
+          <CardDescription>Your Rotaract Club admin account information.</CardDescription>
+        </CardHeader>
+        <CardContent className="flex items-center gap-4">
+          <Avatar className="h-16 w-16 border border-border/80 shadow-sm">
+            <AvatarFallback className="text-lg font-bold bg-primary/10 text-primary">
+              {initials}
+            </AvatarFallback>
+          </Avatar>
+          <div className="space-y-1">
+            <p className="text-base font-extrabold text-foreground">{user?.name || 'Administrator'}</p>
+            <p className="text-xs font-semibold text-muted-foreground">{user?.email}</p>
+            <span className="inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-bold text-primary uppercase">
+              Role: {(user as any)?.role || 'Admin'}
+            </span>
+          </div>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
@@ -63,7 +89,7 @@ export function SettingsPage() {
       <Card>
         <CardHeader>
           <CardTitle>Install App</CardTitle>
-          <CardDescription>Add ClubOps to your phone or desktop for quick, app-like access.</CardDescription>
+          <CardDescription>Add Rotaract Club of Salem Midtown to your phone or desktop for quick, app-like access.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           {isInstalled ? (
