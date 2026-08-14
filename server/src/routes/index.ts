@@ -18,6 +18,7 @@ import { searchRouter } from './search.routes';
 import { attentionRouter } from './attention.routes';
 import { reportsRouter } from './reports.routes';
 import { settingsRouter } from './settings.routes';
+import { attendanceRouter } from './attendance.routes';
 
 export const apiRouter = Router();
 
@@ -40,3 +41,4 @@ apiRouter.use('/search', searchRouter);
 apiRouter.use('/attention', attentionRouter);
 apiRouter.use('/reports', reportsRouter);
 apiRouter.use('/settings', settingsRouter);
+apiRouter.use('/attendance', attendanceRouter);

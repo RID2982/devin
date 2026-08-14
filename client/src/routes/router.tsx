@@ -20,6 +20,7 @@ const PeoplePage = lazy(() => import('@/pages/people/PeoplePage').then((m) => ({
 const CalendarPage = lazy(() => import('@/pages/calendar/CalendarPage').then((m) => ({ default: m.CalendarPage })));
 const SearchPage = lazy(() => import('@/pages/search/SearchPage').then((m) => ({ default: m.SearchPage })));
 const SettingsPage = lazy(() => import('@/pages/settings/SettingsPage').then((m) => ({ default: m.SettingsPage })));
+const AttendancePage = lazy(() => import('@/pages/attendance/AttendancePage').then((m) => ({ default: m.AttendancePage })));
 
 export const router = createBrowserRouter([
   { path: '/login', element: withSuspense(LoginPage) },
@@ -42,6 +43,7 @@ export const router = createBrowserRouter([
           { path: '/search', element: withSuspense(SearchPage) },
           { path: '/reports', element: withSuspense(DashboardPage) },
           { path: '/settings', element: withSuspense(SettingsPage) },
+          { path: '/attendance', element: withSuspense(AttendancePage) },
         ],
       },
     ],

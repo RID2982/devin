@@ -36,15 +36,14 @@ docker compose up -d postgres
 
 or point `DATABASE_URL` at your own local Postgres. Either way, verify it's reachable before continuing.
 
-## 4. Run migrations and seed data
+## 4. Run migrations
 
 ```bash
 npm run db:generate -w database   # generates SQL from database/src/schema.ts (already generated once, re-run after schema changes)
 npm run db:migrate  -w database   # applies migrations to DATABASE_URL
-npm run db:seed     -w database   # populates realistic demo data (idempotent — skips if events already exist)
 ```
 
-The seed script creates the single admin `app_users` row matching `ADMIN_EMAIL`, plus ~4 months of realistic club activity (Orientation, Installation, Leadership Seminar, Catalyst, District Conference, Walkathon, Blood Donation Camp), built-in checklist templates, 8 people, tags, and a few comments/notes/attachments — enough to exercise every page without manual data entry.
+There is no seed script — the database starts empty. The single admin `app_users` row is created automatically on first login (matched against `ADMIN_EMAIL`), and everything else (events, people, tasks, etc.) is created through the app itself.
 
 ## 5. Run the app
 

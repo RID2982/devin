@@ -8,6 +8,7 @@ const TABLE_NAMES = [
   'tasks',
   'people',
   'event_people',
+  'event_attendance',
   'task_assignees',
   'task_dependencies',
   'checklist_items',

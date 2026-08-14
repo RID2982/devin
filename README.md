@@ -20,11 +20,10 @@ cp .env.example .env          # then set ADMIN_EMAIL / ADMIN_PASSWORD / JWT_SECR
 docker compose up -d postgres # or point DATABASE_URL at a local Postgres install
 npm run db:generate -w database
 npm run db:migrate  -w database
-npm run db:seed     -w database
 npm run dev                   # client on :5173, server on :4000
 ```
 
-Sign in at http://localhost:5173/login with the `ADMIN_EMAIL`/`ADMIN_PASSWORD` you set. Full step-by-step instructions are in [`docs/INSTALL.md`](docs/INSTALL.md).
+Sign in at http://localhost:5173/login with the `ADMIN_EMAIL`/`ADMIN_PASSWORD` you set — the admin account is created automatically on first login, no seeding required. Full step-by-step instructions are in [`docs/INSTALL.md`](docs/INSTALL.md).
 
 ## Monorepo layout
 

@@ -29,4 +29,5 @@ export const queryKeys = {
   tags: ['tags'] as const,
   settings: ['settings'] as const,
   notifications: ['notifications'] as const,
+  attendance: (eventId?: string) => ['attendance', eventId] as const,
 };
