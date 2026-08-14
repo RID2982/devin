@@ -16,6 +16,7 @@ import {
 } from 'drizzle-orm/pg-core';
 import {
   ACTIVITY_ACTIONS,
+  ATTENDANCE_STATUSES,
   EMAIL_STATUSES,
   EVENT_STATUSES,
   NOTIFICATION_TYPES,
@@ -34,6 +35,7 @@ export const emailStatusEnum = pgEnum('email_status', [...EMAIL_STATUSES]);
 export const notificationTypeEnum = pgEnum('notification_type', [...NOTIFICATION_TYPES]);
 export const permissionLevelEnum = pgEnum('permission_level', [...PERMISSION_LEVELS]);
 export const activityActionEnum = pgEnum('activity_action', [...ACTIVITY_ACTIONS]);
+export const attendanceStatusEnum = pgEnum('attendance_status', [...ATTENDANCE_STATUSES]);
 
 const timestamps = {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
@@ -135,6 +137,18 @@ export const taskAssignees = pgTable('task_assignees', {
   assignedAt: timestamp('assigned_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => ({
   uniq: uniqueIndex('task_assignees_task_person_idx').on(t.taskId, t.personId),
+}));
+
+export const eventAttendance = pgTable('event_attendance', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  eventId: uuid('event_id').notNull().references(() => events.id, { onDelete: 'cascade' }),
+  personId: uuid('person_id').notNull().references(() => people.id, { onDelete: 'cascade' }),
+  status: attendanceStatusEnum('status').notNull().default('Absent'),
+  markedAt: timestamp('marked_at', { withTimezone: true }),
+  markedByUserId: uuid('marked_by_user_id').references(() => appUsers.id, { onDelete: 'set null' }),
+  ...timestamps,
+}, (t) => ({
+  uniq: uniqueIndex('event_attendance_event_person_idx').on(t.eventId, t.personId),
 }));
 
 export const taskDependencies = pgTable('task_dependencies', {
@@ -304,6 +318,7 @@ export const eventsRelations = relations(events, ({ many }) => ({
   activityLogs: many(activityLogs),
   eventPeople: many(eventPeople),
   eventTags: many(eventTags),
+  eventAttendance: many(eventAttendance),
 }));
 
 export const tasksRelations = relations(tasks, ({ one, many }) => ({
@@ -318,11 +333,18 @@ export const tasksRelations = relations(tasks, ({ one, many }) => ({
 export const peopleRelations = relations(people, ({ many }) => ({
   eventAssignments: many(eventPeople),
   taskAssignments: many(taskAssignees),
+  eventAttendance: many(eventAttendance),
 }));
 
 export const eventPeopleRelations = relations(eventPeople, ({ one }) => ({
   event: one(events, { fields: [eventPeople.eventId], references: [events.id] }),
   person: one(people, { fields: [eventPeople.personId], references: [people.id] }),
+}));
+
+export const eventAttendanceRelations = relations(eventAttendance, ({ one }) => ({
+  event: one(events, { fields: [eventAttendance.eventId], references: [events.id] }),
+  person: one(people, { fields: [eventAttendance.personId], references: [people.id] }),
+  markedByUser: one(appUsers, { fields: [eventAttendance.markedByUserId], references: [appUsers.id] }),
 }));
 
 export const taskAssigneesRelations = relations(taskAssignees, ({ one }) => ({

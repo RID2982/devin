@@ -30,8 +30,12 @@ export const ACTIVITY_ACTIONS = [
   'COMMENT_ADDED',
   'PERSON_ASSIGNED',
   'NOTE_UPDATED',
+  'ATTENDANCE_MARKED',
 ] as const;
 export type ActivityAction = (typeof ACTIVITY_ACTIONS)[number];
+
+export const ATTENDANCE_STATUSES = ['Present', 'Absent'] as const;
+export type AttendanceStatus = (typeof ATTENDANCE_STATUSES)[number];
 
 export const NOTIFICATION_TYPES = [
   'TASK_ASSIGNED',

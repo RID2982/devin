@@ -7,6 +7,7 @@ import {
   PartyPopper,
   Users,
   Calendar,
+  ClipboardCheck,
   Settings,
   LogOut,
   Smartphone,
@@ -26,6 +27,7 @@ const NAV_ITEMS = [
   { to: '/events', label: 'Events', icon: PartyPopper },
   { to: '/people', label: 'People', icon: Users },
   { to: '/calendar', label: 'Calendar', icon: Calendar },
+  { to: '/attendance', label: 'Attendance', icon: ClipboardCheck },
   { to: '/settings', label: 'Settings', icon: Settings },
 ];
 

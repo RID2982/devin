@@ -7,6 +7,7 @@ import {
   Users,
   FileStack,
   BarChart3,
+  ClipboardCheck,
   Settings,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -21,6 +22,7 @@ const PRIMARY_TABS = [
 const MORE_ITEMS = [
   { to: '/planner', label: 'Monthly Planner', icon: CalendarRange },
   { to: '/people', label: 'People', icon: Users },
+  { to: '/attendance', label: 'Attendance', icon: ClipboardCheck },
   { to: '/templates', label: 'Templates', icon: FileStack },
   { to: '/reports', label: 'Reports', icon: BarChart3 },
   { to: '/settings', label: 'Settings', icon: Settings },
