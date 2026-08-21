@@ -19,7 +19,7 @@ export interface TaskRecord {
   updatedAt: string;
 }
 
-export interface TaskListParams {
+export type TaskListParams = {
   page?: number;
   pageSize?: number;
   search?: string;
@@ -29,12 +29,12 @@ export interface TaskListParams {
   archived?: boolean;
   sortBy?: string;
   sortDir?: 'asc' | 'desc';
-}
+};
 
 export function useTasksQuery(params: TaskListParams = {}) {
   return useQuery({
     queryKey: queryKeys.tasks.list(params),
-    queryFn: () => apiClient.get<Paginated<TaskRecord>>(`/tasks${buildQueryString(params as Record<string, string>)}`),
+    queryFn: () => apiClient.get<Paginated<TaskRecord>>(`/tasks${buildQueryString(params)}`),
   });
 }
 
@@ -42,6 +42,7 @@ function invalidateTaskRelated(qc: ReturnType<typeof useQueryClient>, eventId?: 
   qc.invalidateQueries({ queryKey: queryKeys.tasks.all });
   qc.invalidateQueries({ queryKey: queryKeys.dashboard });
   qc.invalidateQueries({ queryKey: queryKeys.attention });
+  qc.invalidateQueries({ queryKey: ['planner'] });
   if (eventId) {
     qc.invalidateQueries({ queryKey: queryKeys.events.detail(eventId) });
     qc.invalidateQueries({ queryKey: queryKeys.events.summary(eventId) });
@@ -72,10 +73,19 @@ export function useSetTaskStatus() {
   });
 }
 
+/** Soft delete — `DELETE /tasks/:id` sets `archivedAt`; restore from the Archive page. */
 export function useArchiveTask() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => apiClient.delete(`/tasks/${id}`),
+    onSuccess: () => invalidateTaskRelated(qc),
+  });
+}
+
+export function useRestoreTask() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => apiClient.post(`/tasks/${id}/restore`),
     onSuccess: () => invalidateTaskRelated(qc),
   });
 }

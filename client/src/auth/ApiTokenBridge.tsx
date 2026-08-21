@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { setApiTokenGetter } from '@/lib/api';
 import { setDownloadTokenGetter } from '@/lib/downloadAttachment';
-import { useAuth } from './AuthProvider';
+import { useAuth } from './useAuth';
 
 /** Keeps the shared apiClient's token getter in sync with the current auth session. */
 export function ApiTokenBridge() {

@@ -32,7 +32,7 @@ export function NotesTab({ eventId }: { eventId: string }) {
   };
 
   const handleDelete = (id: string) => {
-    if (confirm('Are you sure you want to permanently delete this note?')) {
+    if (confirm('Delete this note? It disappears from the event and cannot be brought back from the app.')) {
       deleteNote.mutate(id, {
         onSuccess: () => setActiveId(null),
       });
@@ -56,7 +56,7 @@ export function NotesTab({ eventId }: { eventId: string }) {
   // Extract a text-only preview snippet from markdown body
   const getNoteSnippet = (markdown: string) => {
     const clean = markdown
-      .replace(/[#*`_\[\]()\-]/g, ' ') // remove simple markdown tokens
+      .replace(/[#*`_[\]()-]/g, ' ') // remove simple markdown tokens
       .replace(/\s+/g, ' ') // collapse whitespaces
       .trim();
     return clean ? clean.slice(0, 45) + (clean.length > 45 ? '...' : '') : 'No additional text';

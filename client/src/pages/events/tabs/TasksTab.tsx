@@ -119,7 +119,7 @@ export function TasksTab({ eventId }: { eventId: string }) {
                     variant="ghost"
                     size="icon"
                     className="text-destructive hover:bg-destructive/10 hover:text-destructive h-7 w-7 rounded-lg shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                    onClick={() => confirm('Are you sure you want to delete this task?') && archiveTask.mutate(task.id)}
+                    onClick={() => confirm('Archive this task? You can restore it from the Archive page.') && archiveTask.mutate(task.id)}
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                   </Button>

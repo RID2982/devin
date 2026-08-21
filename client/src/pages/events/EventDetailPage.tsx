@@ -1,7 +1,7 @@
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Trash2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useEventQuery, useDeleteEvent, useUpdateEvent } from '@/features/events/useEvents';
+import { useEventQuery, useArchiveEvent, useUpdateEvent } from '@/features/events/useEvents';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -22,7 +22,7 @@ export function EventDetailPage() {
   const { id, tab = 'overview' } = useParams<{ id: string; tab?: string }>();
   const navigate = useNavigate();
   const { data: event, isLoading } = useEventQuery(id);
-  const deleteEvent = useDeleteEvent();
+  const archiveEvent = useArchiveEvent();
   const updateEvent = useUpdateEvent(id ?? '');
 
   if (isLoading || !event) {
@@ -37,8 +37,8 @@ export function EventDetailPage() {
   const activeTab = TABS.includes(tab as (typeof TABS)[number]) ? tab : 'overview';
 
   const handleDelete = () => {
-    if (confirm(`Are you sure you want to permanently delete "${event.name}"? This will remove all associated tasks, checklist items, and documents.`)) {
-      deleteEvent.mutate(event.id, {
+    if (confirm(`Archive "${event.name}"? It moves out of your lists along with its tasks, and you can restore it from the Archive page.`)) {
+      archiveEvent.mutate(event.id, {
         onSuccess: () => navigate('/events'),
       });
     }

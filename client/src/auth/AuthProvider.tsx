@@ -1,23 +1,5 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-
-export interface AuthUser {
-  id: string;
-  email: string;
-  name?: string | null;
-}
-
-interface AuthState {
-  status: 'loading' | 'authenticated' | 'unauthenticated';
-  user: AuthUser | null;
-  accessToken: string | null;
-}
-
-interface AuthContextValue extends AuthState {
-  signIn(email: string, password: string, rememberMe?: boolean): Promise<void>;
-  signOut(): void;
-}
-
-const AuthContext = createContext<AuthContextValue | null>(null);
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { AuthContext, type AuthContextValue, type AuthState } from './authContext';
 
 const TOKEN_STORAGE_KEY = 'auth_token';
 const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:4000/api/v1';
@@ -89,10 +71,4 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const value = useMemo<AuthContextValue>(() => ({ ...state, signIn, signOut }), [state, signIn, signOut]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
-}
-
-export function useAuth() {
-  const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error('useAuth must be used within AuthProvider');
-  return ctx;
 }

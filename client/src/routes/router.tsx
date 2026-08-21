@@ -21,6 +21,11 @@ const CalendarPage = lazy(() => import('@/pages/calendar/CalendarPage').then((m)
 const SearchPage = lazy(() => import('@/pages/search/SearchPage').then((m) => ({ default: m.SearchPage })));
 const SettingsPage = lazy(() => import('@/pages/settings/SettingsPage').then((m) => ({ default: m.SettingsPage })));
 const AttendancePage = lazy(() => import('@/pages/attendance/AttendancePage').then((m) => ({ default: m.AttendancePage })));
+const TasksPage = lazy(() => import('@/pages/tasks/TasksPage').then((m) => ({ default: m.TasksPage })));
+const TemplatesPage = lazy(() => import('@/pages/templates/TemplatesPage').then((m) => ({ default: m.TemplatesPage })));
+const ReportsPage = lazy(() => import('@/pages/reports/ReportsPage').then((m) => ({ default: m.ReportsPage })));
+const AttentionPage = lazy(() => import('@/pages/attention/AttentionPage').then((m) => ({ default: m.AttentionPage })));
+const ArchivePage = lazy(() => import('@/pages/archive/ArchivePage').then((m) => ({ default: m.ArchivePage })));
 
 export const router = createBrowserRouter([
   { path: '/login', element: withSuspense(LoginPage) },
@@ -36,14 +41,16 @@ export const router = createBrowserRouter([
           { path: '/events', element: withSuspense(EventsListPage) },
           { path: '/events/:id', element: withSuspense(EventDetailPage) },
           { path: '/events/:id/:tab', element: withSuspense(EventDetailPage) },
-          { path: '/tasks', element: withSuspense(DashboardPage) },
+          { path: '/tasks', element: withSuspense(TasksPage) },
           { path: '/people', element: withSuspense(PeoplePage) },
-          { path: '/templates', element: withSuspense(DashboardPage) },
+          { path: '/templates', element: withSuspense(TemplatesPage) },
           { path: '/calendar', element: withSuspense(CalendarPage) },
           { path: '/search', element: withSuspense(SearchPage) },
-          { path: '/reports', element: withSuspense(DashboardPage) },
+          { path: '/reports', element: withSuspense(ReportsPage) },
           { path: '/settings', element: withSuspense(SettingsPage) },
           { path: '/attendance', element: withSuspense(AttendancePage) },
+          { path: '/attention', element: withSuspense(AttentionPage) },
+          { path: '/archive', element: withSuspense(ArchivePage) },
         ],
       },
     ],

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { Plus, Trash2 } from 'lucide-react';
-import { usePeopleQuery, useCreatePerson, useDeletePerson } from '@/features/people/usePeople';
+import { usePeopleQuery, useCreatePerson, useArchivePerson } from '@/features/people/usePeople';
 import { Card, CardContent } from '@/components/ui/card';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -23,7 +23,7 @@ interface FormValues {
 export function PeoplePage() {
   const { data, isLoading } = usePeopleQuery({ pageSize: 100 });
   const createPerson = useCreatePerson();
-  const deletePerson = useDeletePerson();
+  const archivePerson = useArchivePerson();
   const [open, setOpen] = useState(false);
   const { register, handleSubmit, reset, formState } = useForm<FormValues>();
 
@@ -34,8 +34,8 @@ export function PeoplePage() {
   }
 
   const handleDelete = (id: string, name: string) => {
-    if (confirm(`Are you sure you want to permanently delete "${name}" from the people directory?`)) {
-      deletePerson.mutate(id);
+    if (confirm(`Archive "${name}"? They come out of the directory but keep their event and task history, and you can restore them from the Archive page.`)) {
+      archivePerson.mutate(id);
     }
   };
 
