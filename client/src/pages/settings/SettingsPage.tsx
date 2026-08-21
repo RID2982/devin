@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { useUiStore } from '@/stores/uiStore';
 import { useSettingsQuery, useUpdateSettings } from '@/features/settings/useSettings';
 import { usePwaInstall } from '@/hooks/usePwaInstall';
-import { useAuth } from '@/auth/AuthProvider';
+import { useAuth } from '@/auth/useAuth';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
 

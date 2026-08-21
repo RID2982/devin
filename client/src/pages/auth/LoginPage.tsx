@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/shared/Checkbox';
 import { Logo } from '@/components/shared/Logo';
 import { PwaInstallCard } from '@/components/shared/PwaInstallCard';
-import { useAuth } from '@/auth/AuthProvider';
+import { useAuth } from '@/auth/useAuth';
 import { LOGO_SRC } from '@/config/brand';
 import { cn } from '@/lib/utils';
 

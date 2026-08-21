@@ -20,7 +20,7 @@ export function TimelineTab({ eventId }: { eventId: string }) {
   const { data: event } = useEventQuery(eventId);
   const { data: tasksData } = useTasksQuery({ eventId, pageSize: 100 });
   const { data: activity } = useEventTimelineQuery(eventId) as { data: ActivityRow[] | undefined };
-  const { data: comments } = useEventTimelineQuery(eventId) ? useCommentsQuery(eventId) : { data: undefined };
+  const { data: comments } = useCommentsQuery(eventId);
   const createComment = useCreateComment(eventId);
   const [body, setBody] = useState('');
 

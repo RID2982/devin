@@ -21,15 +21,20 @@ export interface PersonRecord {
 export function usePeopleQuery(params: { search?: string; archived?: boolean; page?: number; pageSize?: number } = {}) {
   return useQuery({
     queryKey: queryKeys.people.list(params),
-    queryFn: () => apiClient.get<Paginated<PersonRecord>>(`/people${buildQueryString(params as Record<string, string>)}`),
+    queryFn: () => apiClient.get<Paginated<PersonRecord>>(`/people${buildQueryString(params)}`),
   });
+}
+
+function invalidatePeopleRelated(qc: ReturnType<typeof useQueryClient>) {
+  qc.invalidateQueries({ queryKey: queryKeys.people.all });
+  qc.invalidateQueries({ queryKey: queryKeys.dashboard });
 }
 
 export function useCreatePerson() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (data: Record<string, unknown>) => apiClient.post<PersonRecord>('/people', data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.people.all }),
+    onSuccess: () => invalidatePeopleRelated(qc),
   });
 }
 
@@ -37,25 +42,27 @@ export function useUpdatePerson(id: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (data: Record<string, unknown>) => apiClient.patch<PersonRecord>(`/people/${id}`, data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.people.all }),
+    onSuccess: () => invalidatePeopleRelated(qc),
   });
 }
 
+/**
+ * Soft delete — `DELETE /people/:id` sets `archivedAt`. The person keeps their
+ * event assignments and task history and can be restored from the Archive page.
+ * (`useDeletePerson` used to sit alongside this doing exactly the same thing.)
+ */
 export function useArchivePerson() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => apiClient.delete(`/people/${id}`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.people.all }),
+    onSuccess: () => invalidatePeopleRelated(qc),
   });
 }
 
-export function useDeletePerson() {
+export function useRestorePerson() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => apiClient.delete(`/people/${id}`),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: queryKeys.people.all });
-      qc.invalidateQueries({ queryKey: queryKeys.dashboard });
-    },
+    mutationFn: (id: string) => apiClient.post(`/people/${id}/restore`),
+    onSuccess: () => invalidatePeopleRelated(qc),
   });
 }

@@ -11,12 +11,16 @@ import {
   Settings,
   LogOut,
   Smartphone,
+  ListChecks,
+  LayoutList,
+  FileBarChart,
+  Archive,
 } from 'lucide-react';
 import { useUiStore } from '@/stores/uiStore';
 import { Logo } from '@/components/shared/Logo';
 import { LOGO_SRC } from '@/config/brand';
 import { cn } from '@/lib/utils';
-import { useAuth } from '@/auth/AuthProvider';
+import { useAuth } from '@/auth/useAuth';
 import { usePwaInstall } from '@/hooks/usePwaInstall';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -25,9 +29,13 @@ const NAV_ITEMS = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
   { to: '/planner', label: 'Monthly Planner', icon: CalendarRange },
   { to: '/events', label: 'Events', icon: PartyPopper },
+  { to: '/tasks', label: 'Tasks', icon: ListChecks },
   { to: '/people', label: 'People', icon: Users },
   { to: '/calendar', label: 'Calendar', icon: Calendar },
   { to: '/attendance', label: 'Attendance', icon: ClipboardCheck },
+  { to: '/templates', label: 'Templates', icon: LayoutList },
+  { to: '/reports', label: 'Reports', icon: FileBarChart },
+  { to: '/archive', label: 'Archive', icon: Archive },
   { to: '/settings', label: 'Settings', icon: Settings },
 ];
 
