@@ -1,7 +1,5 @@
-import { and, eq, gte, isNull, lte, ne, notInArray, sql } from 'drizzle-orm';
-import { db, schema } from '../lib/db';
-
-const { events, tasks, taskAssignees, checklistItems, attachments } = schema;
+import { db } from '../lib/db';
+import { isArchived } from '../lib/query';
 
 function in7Days() {
   const d = new Date();
@@ -9,25 +7,34 @@ function in7Days() {
   return d;
 }
 
+/**
+ * Everything the dashboard flags as needing a human. Each bucket used to be its
+ * own aggregate query; DynamoDB has no aggregates, so the four source tables are
+ * read once each and every bucket is derived from those in-memory lists.
+ */
 export async function getAttentionItems() {
-  const activeTask = isNull(tasks.archivedAt);
-  const activeEvent = isNull(events.archivedAt);
   const now = new Date();
+  const soon = in7Days();
 
-  const [overdueTasks, highPriorityTasks, upcomingDeadlines, assignedTaskIds, allOpenTasks, allActiveEvents, checklistRows, attachmentEventIds] =
-    await Promise.all([
-      db.select().from(tasks).where(and(activeTask, ne(tasks.status, 'Completed'), lte(tasks.deadline, now))),
-      db.select().from(tasks).where(and(activeTask, ne(tasks.status, 'Completed'), sql`${tasks.priority} in ('High','Critical')`)),
-      db.select().from(tasks).where(and(activeTask, ne(tasks.status, 'Completed'), gte(tasks.deadline, now), lte(tasks.deadline, in7Days()))),
-      db.selectDistinct({ taskId: taskAssignees.taskId }).from(taskAssignees),
-      db.select().from(tasks).where(and(activeTask, ne(tasks.status, 'Completed'))),
-      db.select().from(events).where(activeEvent),
-      db.select().from(checklistItems),
-      db.selectDistinct({ eventId: attachments.eventId }).from(attachments),
-    ]);
+  const [allTasks, allEvents, assignments, checklistRows, allAttachments] = await Promise.all([
+    db.tasks.all(),
+    db.events.all(),
+    db.taskAssignees.all(),
+    db.checklistItems.all(),
+    db.attachments.all(),
+  ]);
 
-  const assignedSet = new Set(assignedTaskIds.map((r) => r.taskId));
-  const unassignedTasks = allOpenTasks.filter((t) => !assignedSet.has(t.id));
+  const openTasks = allTasks.filter((t) => !isArchived(t.archivedAt) && t.status !== 'Completed');
+  const activeEvents = allEvents.filter((e) => !isArchived(e.archivedAt));
+
+  const overdueTasks = openTasks.filter((t) => t.deadline !== null && t.deadline <= now);
+  const highPriorityTasks = openTasks.filter((t) => t.priority === 'High' || t.priority === 'Critical');
+  const upcomingDeadlines = openTasks.filter(
+    (t) => t.deadline !== null && t.deadline >= now && t.deadline <= soon,
+  );
+
+  const assignedTaskIds = new Set(assignments.map((row) => row.taskId));
+  const unassignedTasks = openTasks.filter((t) => !assignedTaskIds.has(t.id));
 
   const checklistByEvent = new Map<string, { total: number; done: number }>();
   for (const item of checklistRows) {
@@ -37,15 +44,15 @@ export async function getAttentionItems() {
     if (item.isDone) entry.done += 1;
     checklistByEvent.set(item.eventId, entry);
   }
-  const incompleteChecklists = allActiveEvents.filter((e) => {
+  const incompleteChecklists = activeEvents.filter((e) => {
     const entry = checklistByEvent.get(e.id);
     return entry && entry.done < entry.total;
   });
 
-  const withAttachments = new Set(attachmentEventIds.map((r) => r.eventId));
-  const missingDocuments = allActiveEvents.filter((e) => !withAttachments.has(e.id));
+  const withAttachments = new Set(allAttachments.map((row) => row.eventId).filter(Boolean));
+  const missingDocuments = activeEvents.filter((e) => !withAttachments.has(e.id));
 
-  const budgetPending = allActiveEvents.filter((e) => e.budget === null);
+  const budgetPending = activeEvents.filter((e) => e.budget === null);
 
   return {
     overdueTasks,

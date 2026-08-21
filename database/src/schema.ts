@@ -1,19 +1,3 @@
-import { relations } from 'drizzle-orm';
-import {
-  boolean,
-  index,
-  integer,
-  jsonb,
-  numeric,
-  pgEnum,
-  pgTable,
-  primaryKey,
-  text,
-  timestamp,
-  uniqueIndex,
-  uuid,
-  varchar,
-} from 'drizzle-orm/pg-core';
 import {
   ACTIVITY_ACTIONS,
   ATTENDANCE_STATUSES,
@@ -26,341 +10,436 @@ import {
 } from '@app/shared';
 
 // ---------------------------------------------------------------------------
-// Enums
+// Table definitions
 // ---------------------------------------------------------------------------
-export const eventStatusEnum = pgEnum('event_status', [...EVENT_STATUSES]);
-export const taskStatusEnum = pgEnum('task_status', [...TASK_STATUSES]);
-export const priorityEnum = pgEnum('priority', [...PRIORITIES]);
-export const emailStatusEnum = pgEnum('email_status', [...EMAIL_STATUSES]);
-export const notificationTypeEnum = pgEnum('notification_type', [...NOTIFICATION_TYPES]);
-export const permissionLevelEnum = pgEnum('permission_level', [...PERMISSION_LEVELS]);
-export const activityActionEnum = pgEnum('activity_action', [...ACTIVITY_ACTIONS]);
-export const attendanceStatusEnum = pgEnum('attendance_status', [...ATTENDANCE_STATUSES]);
+// One DynamoDB table per entity, named exactly like the SQL tables this replaced
+// (optionally prefixed via DYNAMODB_TABLE_PREFIX, since DynamoDB table names are
+// account+region global). Attributes keep the camelCase names the API already
+// returns, so nothing downstream of the repositories changed shape.
+//
+// `columns` is the full column list: it drives defaults on write and null-filling
+// on read, so every item comes back with every attribute present — the same row
+// shape `SELECT *` used to produce.
 
-const timestamps = {
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
-};
+export type ColumnType = 'string' | 'number' | 'boolean' | 'date' | 'json' | 'list';
+
+export interface ColumnDef {
+  type: ColumnType;
+  /** Value used when a column is omitted on create. A function is called per row. */
+  default?: unknown | (() => unknown);
+  /** Documents the allowed values for what used to be a Postgres enum. */
+  enum?: readonly string[];
+}
+
+export interface IndexDef {
+  name: string;
+  hashKey: string;
+  rangeKey?: string;
+}
+
+export interface TableDef {
+  /** Physical table name, before DYNAMODB_TABLE_PREFIX is applied. */
+  name: string;
+  hashKey: string;
+  rangeKey?: string;
+  columns: Record<string, ColumnDef>;
+  indexes?: IndexDef[];
+}
+
+const uuid = (): ColumnDef => ({ type: 'string', default: () => crypto.randomUUID() });
+const now = (): ColumnDef => ({ type: 'date', default: () => new Date() });
+const timestamps = { createdAt: now(), updatedAt: now() };
+
+function defineTable<const T extends TableDef>(def: T): T {
+  return def;
+}
 
 // ---------------------------------------------------------------------------
 // Auth / Users
 // ---------------------------------------------------------------------------
-// Single-admin auth: there is exactly one row here, matched by ADMIN_EMAIL at
+// Single-admin auth: there is exactly one item here, matched by ADMIN_EMAIL at
 // login time. No external identity provider — see server/src/services/authService.ts.
-export const appUsers = pgTable('app_users', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  email: varchar('email', { length: 255 }).notNull(),
-  name: varchar('name', { length: 255 }),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-}, (t) => ({
-  emailIdx: uniqueIndex('app_users_email_idx').on(t.email),
-}));
+export const appUsers = defineTable({
+  name: 'app_users',
+  hashKey: 'id',
+  columns: {
+    id: uuid(),
+    email: { type: 'string' },
+    name: { type: 'string' },
+    createdAt: now(),
+  },
+  indexes: [{ name: 'app_users_email_idx', hashKey: 'email' }],
+});
 
 // ---------------------------------------------------------------------------
 // Core: Events / Tasks / People
 // ---------------------------------------------------------------------------
-export const events = pgTable('events', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  name: varchar('name', { length: 255 }).notNull(),
-  category: varchar('category', { length: 100 }),
-  date: timestamp('date', { withTimezone: true }).notNull(),
-  endDate: timestamp('end_date', { withTimezone: true }),
-  time: varchar('time', { length: 20 }),
-  venue: varchar('venue', { length: 255 }),
-  budget: numeric('budget', { precision: 12, scale: 2 }),
-  expenses: jsonb('expenses').default([]),
-  status: eventStatusEnum('status').notNull().default('Planning'),
-  priority: priorityEnum('priority').notNull().default('Medium'),
-  color: varchar('color', { length: 20 }).default('#b42244'),
-  description: text('description'),
-  coverImagePath: text('cover_image_path'),
-  archivedAt: timestamp('archived_at', { withTimezone: true }),
-  ...timestamps,
-}, (t) => ({
-  dateIdx: index('events_date_idx').on(t.date),
-  statusIdx: index('events_status_idx').on(t.status),
-  archivedIdx: index('events_archived_idx').on(t.archivedAt),
-}));
+export const events = defineTable({
+  name: 'events',
+  hashKey: 'id',
+  columns: {
+    id: uuid(),
+    name: { type: 'string' },
+    category: { type: 'string' },
+    date: { type: 'date' },
+    endDate: { type: 'date' },
+    time: { type: 'string' },
+    venue: { type: 'string' },
+    // Stored as a string, exactly like pg's numeric(12,2) came back over the wire.
+    budget: { type: 'string' },
+    expenses: { type: 'json', default: () => [] },
+    status: { type: 'string', default: 'Planning', enum: EVENT_STATUSES },
+    priority: { type: 'string', default: 'Medium', enum: PRIORITIES },
+    color: { type: 'string', default: '#b42244' },
+    description: { type: 'string' },
+    coverImagePath: { type: 'string' },
+    archivedAt: { type: 'date' },
+    ...timestamps,
+  },
+});
 
-export const tasks = pgTable('tasks', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  eventId: uuid('event_id').notNull().references(() => events.id, { onDelete: 'cascade' }),
-  title: varchar('title', { length: 255 }).notNull(),
-  description: text('description'),
-  deadline: timestamp('deadline', { withTimezone: true }),
-  priority: priorityEnum('priority').notNull().default('Medium'),
-  status: taskStatusEnum('status').notNull().default('Pending'),
-  estimatedMinutes: integer('estimated_minutes'),
-  actualMinutes: integer('actual_minutes'),
-  order: integer('order').notNull().default(0),
-  archivedAt: timestamp('archived_at', { withTimezone: true }),
-  ...timestamps,
-}, (t) => ({
-  deadlineIdx: index('tasks_deadline_idx').on(t.deadline),
-  statusIdx: index('tasks_status_idx').on(t.status),
-  eventIdx: index('tasks_event_id_idx').on(t.eventId),
-}));
+export const tasks = defineTable({
+  name: 'tasks',
+  hashKey: 'id',
+  columns: {
+    id: uuid(),
+    eventId: { type: 'string' },
+    title: { type: 'string' },
+    description: { type: 'string' },
+    deadline: { type: 'date' },
+    priority: { type: 'string', default: 'Medium', enum: PRIORITIES },
+    status: { type: 'string', default: 'Pending', enum: TASK_STATUSES },
+    estimatedMinutes: { type: 'number' },
+    actualMinutes: { type: 'number' },
+    order: { type: 'number', default: 0 },
+    archivedAt: { type: 'date' },
+    ...timestamps,
+  },
+  indexes: [{ name: 'tasks_event_id_idx', hashKey: 'eventId' }],
+});
 
-export const people = pgTable('people', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  name: varchar('name', { length: 255 }).notNull(),
-  email: varchar('email', { length: 255 }),
-  phone: varchar('phone', { length: 40 }),
-  role: varchar('role', { length: 120 }),
-  department: varchar('department', { length: 120 }),
-  organization: varchar('organization', { length: 255 }),
-  skills: text('skills').array(),
-  avatarPath: text('avatar_path'),
-  notes: text('notes'),
-  isActive: boolean('is_active').notNull().default(true),
-  archivedAt: timestamp('archived_at', { withTimezone: true }),
-  ...timestamps,
+export const people = defineTable({
+  name: 'people',
+  hashKey: 'id',
+  columns: {
+    id: uuid(),
+    name: { type: 'string' },
+    email: { type: 'string' },
+    phone: { type: 'string' },
+    role: { type: 'string' },
+    department: { type: 'string' },
+    organization: { type: 'string' },
+    skills: { type: 'list' },
+    avatarPath: { type: 'string' },
+    notes: { type: 'string' },
+    isActive: { type: 'boolean', default: true },
+    archivedAt: { type: 'date' },
+    ...timestamps,
+  },
 });
 
 // ---------------------------------------------------------------------------
 // Join tables
 // ---------------------------------------------------------------------------
-export const eventPeople = pgTable('event_people', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  eventId: uuid('event_id').notNull().references(() => events.id, { onDelete: 'cascade' }),
-  personId: uuid('person_id').notNull().references(() => people.id, { onDelete: 'cascade' }),
-  roleOnEvent: varchar('role_on_event', { length: 120 }),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-}, (t) => ({
-  uniq: uniqueIndex('event_people_event_person_idx').on(t.eventId, t.personId),
-}));
+// These carried a surrogate uuid `id` plus a unique index on the pair under
+// Postgres. Here the pair *is* the primary key, which is what makes the
+// "insert, ignore if it already exists" writes a single conditional call.
+// `id` is still stored so rows imported from Postgres keep their identity.
+export const eventPeople = defineTable({
+  name: 'event_people',
+  hashKey: 'eventId',
+  rangeKey: 'personId',
+  columns: {
+    id: uuid(),
+    eventId: { type: 'string' },
+    personId: { type: 'string' },
+    roleOnEvent: { type: 'string' },
+    createdAt: now(),
+  },
+  indexes: [{ name: 'event_people_person_idx', hashKey: 'personId' }],
+});
 
-export const taskAssignees = pgTable('task_assignees', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  taskId: uuid('task_id').notNull().references(() => tasks.id, { onDelete: 'cascade' }),
-  personId: uuid('person_id').notNull().references(() => people.id, { onDelete: 'cascade' }),
-  assignedAt: timestamp('assigned_at', { withTimezone: true }).notNull().defaultNow(),
-}, (t) => ({
-  uniq: uniqueIndex('task_assignees_task_person_idx').on(t.taskId, t.personId),
-}));
+export const taskAssignees = defineTable({
+  name: 'task_assignees',
+  hashKey: 'taskId',
+  rangeKey: 'personId',
+  columns: {
+    id: uuid(),
+    taskId: { type: 'string' },
+    personId: { type: 'string' },
+    assignedAt: now(),
+  },
+  indexes: [{ name: 'task_assignees_person_idx', hashKey: 'personId' }],
+});
 
-export const eventAttendance = pgTable('event_attendance', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  eventId: uuid('event_id').notNull().references(() => events.id, { onDelete: 'cascade' }),
-  personId: uuid('person_id').notNull().references(() => people.id, { onDelete: 'cascade' }),
-  status: attendanceStatusEnum('status').notNull().default('Absent'),
-  markedAt: timestamp('marked_at', { withTimezone: true }),
-  markedByUserId: uuid('marked_by_user_id').references(() => appUsers.id, { onDelete: 'set null' }),
-  ...timestamps,
-}, (t) => ({
-  uniq: uniqueIndex('event_attendance_event_person_idx').on(t.eventId, t.personId),
-}));
+export const eventAttendance = defineTable({
+  name: 'event_attendance',
+  hashKey: 'eventId',
+  rangeKey: 'personId',
+  columns: {
+    id: uuid(),
+    eventId: { type: 'string' },
+    personId: { type: 'string' },
+    status: { type: 'string', default: 'Absent', enum: ATTENDANCE_STATUSES },
+    markedAt: { type: 'date' },
+    markedByUserId: { type: 'string' },
+    ...timestamps,
+  },
+  indexes: [{ name: 'event_attendance_person_idx', hashKey: 'personId' }],
+});
 
-export const taskDependencies = pgTable('task_dependencies', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  taskId: uuid('task_id').notNull().references(() => tasks.id, { onDelete: 'cascade' }),
-  dependsOnTaskId: uuid('depends_on_task_id').notNull().references(() => tasks.id, { onDelete: 'cascade' }),
-}, (t) => ({
-  uniq: uniqueIndex('task_dependencies_task_depends_idx').on(t.taskId, t.dependsOnTaskId),
-}));
+export const taskDependencies = defineTable({
+  name: 'task_dependencies',
+  hashKey: 'taskId',
+  rangeKey: 'dependsOnTaskId',
+  columns: {
+    id: uuid(),
+    taskId: { type: 'string' },
+    dependsOnTaskId: { type: 'string' },
+  },
+});
 
 // ---------------------------------------------------------------------------
 // Checklists & Templates
 // ---------------------------------------------------------------------------
-export const checklistItems = pgTable('checklist_items', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  label: varchar('label', { length: 255 }).notNull(),
-  isDone: boolean('is_done').notNull().default(false),
-  order: integer('order').notNull().default(0),
-  eventId: uuid('event_id').references(() => events.id, { onDelete: 'cascade' }),
-  taskId: uuid('task_id').references(() => tasks.id, { onDelete: 'cascade' }),
-  completedAt: timestamp('completed_at', { withTimezone: true }),
-  ...timestamps,
-}, (t) => ({
-  eventIdx: index('checklist_items_event_id_idx').on(t.eventId),
-  taskIdx: index('checklist_items_task_id_idx').on(t.taskId),
-}));
-
-export const checklistTemplates = pgTable('checklist_templates', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  name: varchar('name', { length: 150 }).notNull(),
-  description: text('description'),
-  category: varchar('category', { length: 100 }),
-  isBuiltIn: boolean('is_built_in').notNull().default(false),
-  archivedAt: timestamp('archived_at', { withTimezone: true }),
-  ...timestamps,
+export const checklistItems = defineTable({
+  name: 'checklist_items',
+  hashKey: 'id',
+  columns: {
+    id: uuid(),
+    label: { type: 'string' },
+    isDone: { type: 'boolean', default: false },
+    order: { type: 'number', default: 0 },
+    eventId: { type: 'string' },
+    taskId: { type: 'string' },
+    completedAt: { type: 'date' },
+    ...timestamps,
+  },
+  indexes: [
+    { name: 'checklist_items_event_id_idx', hashKey: 'eventId' },
+    { name: 'checklist_items_task_id_idx', hashKey: 'taskId' },
+  ],
 });
 
-export const templateItems = pgTable('template_items', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  templateId: uuid('template_id').notNull().references(() => checklistTemplates.id, { onDelete: 'cascade' }),
-  label: varchar('label', { length: 255 }).notNull(),
-  order: integer('order').notNull().default(0),
+export const checklistTemplates = defineTable({
+  name: 'checklist_templates',
+  hashKey: 'id',
+  columns: {
+    id: uuid(),
+    name: { type: 'string' },
+    description: { type: 'string' },
+    category: { type: 'string' },
+    isBuiltIn: { type: 'boolean', default: false },
+    archivedAt: { type: 'date' },
+    ...timestamps,
+  },
+});
+
+export const templateItems = defineTable({
+  name: 'template_items',
+  hashKey: 'id',
+  columns: {
+    id: uuid(),
+    templateId: { type: 'string' },
+    label: { type: 'string' },
+    order: { type: 'number', default: 0 },
+  },
+  indexes: [{ name: 'template_items_template_id_idx', hashKey: 'templateId' }],
 });
 
 // ---------------------------------------------------------------------------
 // Comments / Attachments / Notes / Tags
 // ---------------------------------------------------------------------------
-export const comments = pgTable('comments', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  body: text('body').notNull(),
-  authorUserId: uuid('author_user_id').references(() => appUsers.id, { onDelete: 'set null' }),
-  eventId: uuid('event_id').references(() => events.id, { onDelete: 'cascade' }),
-  taskId: uuid('task_id').references(() => tasks.id, { onDelete: 'cascade' }),
-  ...timestamps,
+export const comments = defineTable({
+  name: 'comments',
+  hashKey: 'id',
+  columns: {
+    id: uuid(),
+    body: { type: 'string' },
+    authorUserId: { type: 'string' },
+    eventId: { type: 'string' },
+    taskId: { type: 'string' },
+    ...timestamps,
+  },
+  indexes: [
+    { name: 'comments_event_id_idx', hashKey: 'eventId' },
+    { name: 'comments_task_id_idx', hashKey: 'taskId' },
+  ],
 });
 
-export const attachments = pgTable('attachments', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  filename: varchar('filename', { length: 500 }).notNull(),
-  storedPath: text('stored_path').notNull(),
-  mimeType: varchar('mime_type', { length: 150 }),
-  sizeBytes: integer('size_bytes'),
-  eventId: uuid('event_id').references(() => events.id, { onDelete: 'cascade' }),
-  taskId: uuid('task_id').references(() => tasks.id, { onDelete: 'cascade' }),
-  uploadedByUserId: uuid('uploaded_by_user_id').references(() => appUsers.id, { onDelete: 'set null' }),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+export const attachments = defineTable({
+  name: 'attachments',
+  hashKey: 'id',
+  columns: {
+    id: uuid(),
+    filename: { type: 'string' },
+    storedPath: { type: 'string' },
+    mimeType: { type: 'string' },
+    sizeBytes: { type: 'number' },
+    eventId: { type: 'string' },
+    taskId: { type: 'string' },
+    uploadedByUserId: { type: 'string' },
+    createdAt: now(),
+  },
+  indexes: [
+    { name: 'attachments_event_id_idx', hashKey: 'eventId' },
+    { name: 'attachments_task_id_idx', hashKey: 'taskId' },
+  ],
 });
 
-export const notes = pgTable('notes', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  title: varchar('title', { length: 255 }),
-  bodyMarkdown: text('body_markdown').notNull().default(''),
-  eventId: uuid('event_id').references(() => events.id, { onDelete: 'cascade' }),
-  archivedAt: timestamp('archived_at', { withTimezone: true }),
-  ...timestamps,
+export const notes = defineTable({
+  name: 'notes',
+  hashKey: 'id',
+  columns: {
+    id: uuid(),
+    title: { type: 'string' },
+    bodyMarkdown: { type: 'string', default: '' },
+    eventId: { type: 'string' },
+    archivedAt: { type: 'date' },
+    ...timestamps,
+  },
+  indexes: [{ name: 'notes_event_id_idx', hashKey: 'eventId' }],
 });
 
-export const tags = pgTable('tags', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  name: varchar('name', { length: 100 }).notNull(),
-  color: varchar('color', { length: 20 }),
-}, (t) => ({
-  nameIdx: uniqueIndex('tags_name_idx').on(t.name),
-}));
+export const tags = defineTable({
+  name: 'tags',
+  hashKey: 'id',
+  columns: {
+    id: uuid(),
+    name: { type: 'string' },
+    color: { type: 'string' },
+  },
+  indexes: [{ name: 'tags_name_idx', hashKey: 'name' }],
+});
 
-export const eventTags = pgTable('event_tags', {
-  eventId: uuid('event_id').notNull().references(() => events.id, { onDelete: 'cascade' }),
-  tagId: uuid('tag_id').notNull().references(() => tags.id, { onDelete: 'cascade' }),
-}, (t) => ({
-  pk: primaryKey({ columns: [t.eventId, t.tagId] }),
-}));
+export const eventTags = defineTable({
+  name: 'event_tags',
+  hashKey: 'eventId',
+  rangeKey: 'tagId',
+  columns: {
+    eventId: { type: 'string' },
+    tagId: { type: 'string' },
+  },
+  indexes: [{ name: 'event_tags_tag_id_idx', hashKey: 'tagId' }],
+});
 
-export const taskTags = pgTable('task_tags', {
-  taskId: uuid('task_id').notNull().references(() => tasks.id, { onDelete: 'cascade' }),
-  tagId: uuid('tag_id').notNull().references(() => tags.id, { onDelete: 'cascade' }),
-}, (t) => ({
-  pk: primaryKey({ columns: [t.taskId, t.tagId] }),
-}));
+export const taskTags = defineTable({
+  name: 'task_tags',
+  hashKey: 'taskId',
+  rangeKey: 'tagId',
+  columns: {
+    taskId: { type: 'string' },
+    tagId: { type: 'string' },
+  },
+  indexes: [{ name: 'task_tags_tag_id_idx', hashKey: 'tagId' }],
+});
 
 // ---------------------------------------------------------------------------
 // Activity / Email / Notifications / Permissions / Settings
 // ---------------------------------------------------------------------------
-export const activityLogs = pgTable('activity_logs', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  action: activityActionEnum('action').notNull(),
-  summary: text('summary').notNull(),
-  eventId: uuid('event_id').references(() => events.id, { onDelete: 'cascade' }),
-  taskId: uuid('task_id').references(() => tasks.id, { onDelete: 'set null' }),
-  actorUserId: uuid('actor_user_id').references(() => appUsers.id, { onDelete: 'set null' }),
-  metadata: jsonb('metadata'),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-}, (t) => ({
-  createdIdx: index('activity_logs_created_at_idx').on(t.createdAt),
-  eventIdx: index('activity_logs_event_id_idx').on(t.eventId),
-}));
-
-export const emailLogs = pgTable('email_logs', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  to: varchar('to', { length: 255 }).notNull(),
-  subject: varchar('subject', { length: 500 }).notNull(),
-  templateKey: varchar('template_key', { length: 100 }).notNull(),
-  payload: jsonb('payload'),
-  status: emailStatusEnum('status').notNull().default('Stubbed'),
-  transport: varchar('transport', { length: 50 }).notNull().default('console'),
-  relatedEventId: uuid('related_event_id').references(() => events.id, { onDelete: 'set null' }),
-  relatedTaskId: uuid('related_task_id').references(() => tasks.id, { onDelete: 'set null' }),
-  sentAt: timestamp('sent_at', { withTimezone: true }).notNull().defaultNow(),
+export const activityLogs = defineTable({
+  name: 'activity_logs',
+  hashKey: 'id',
+  columns: {
+    id: uuid(),
+    action: { type: 'string', enum: ACTIVITY_ACTIONS },
+    summary: { type: 'string' },
+    eventId: { type: 'string' },
+    taskId: { type: 'string' },
+    actorUserId: { type: 'string' },
+    metadata: { type: 'json' },
+    createdAt: now(),
+  },
+  // createdAt as the range key makes "this event's timeline, newest first" a
+  // single reverse Query instead of a scan-and-sort.
+  indexes: [{ name: 'activity_logs_event_id_idx', hashKey: 'eventId', rangeKey: 'createdAt' }],
 });
 
-export const notifications = pgTable('notifications', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  userId: uuid('user_id').references(() => appUsers.id, { onDelete: 'cascade' }),
-  type: notificationTypeEnum('type').notNull(),
-  title: varchar('title', { length: 255 }).notNull(),
-  body: text('body'),
-  isRead: boolean('is_read').notNull().default(false),
-  relatedEventId: uuid('related_event_id').references(() => events.id, { onDelete: 'set null' }),
-  relatedTaskId: uuid('related_task_id').references(() => tasks.id, { onDelete: 'set null' }),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+export const emailLogs = defineTable({
+  name: 'email_logs',
+  hashKey: 'id',
+  columns: {
+    id: uuid(),
+    to: { type: 'string' },
+    subject: { type: 'string' },
+    templateKey: { type: 'string' },
+    payload: { type: 'json' },
+    status: { type: 'string', default: 'Stubbed', enum: EMAIL_STATUSES },
+    transport: { type: 'string', default: 'console' },
+    relatedEventId: { type: 'string' },
+    relatedTaskId: { type: 'string' },
+    sentAt: now(),
+  },
+});
+
+export const notifications = defineTable({
+  name: 'notifications',
+  hashKey: 'id',
+  columns: {
+    id: uuid(),
+    userId: { type: 'string' },
+    type: { type: 'string', enum: NOTIFICATION_TYPES },
+    title: { type: 'string' },
+    body: { type: 'string' },
+    isRead: { type: 'boolean', default: false },
+    relatedEventId: { type: 'string' },
+    relatedTaskId: { type: 'string' },
+    createdAt: now(),
+  },
+  indexes: [{ name: 'notifications_user_id_idx', hashKey: 'userId', rangeKey: 'createdAt' }],
 });
 
 // Schema-only placeholder for Phase 2+ sharing; not wired to any route/middleware yet.
-export const permissions = pgTable('permissions', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  subjectEmail: varchar('subject_email', { length: 255 }).notNull(),
-  eventId: uuid('event_id').references(() => events.id, { onDelete: 'cascade' }),
-  level: permissionLevelEnum('level').notNull().default('Viewer'),
-  invitedAt: timestamp('invited_at', { withTimezone: true }).notNull().defaultNow(),
-  acceptedAt: timestamp('accepted_at', { withTimezone: true }),
+export const permissions = defineTable({
+  name: 'permissions',
+  hashKey: 'id',
+  columns: {
+    id: uuid(),
+    subjectEmail: { type: 'string' },
+    eventId: { type: 'string' },
+    level: { type: 'string', default: 'Viewer', enum: PERMISSION_LEVELS },
+    invitedAt: now(),
+    acceptedAt: { type: 'date' },
+  },
 });
 
-export const appSettings = pgTable('app_settings', {
-  key: varchar('key', { length: 100 }).primaryKey(),
-  value: jsonb('value').notNull(),
-  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+export const appSettings = defineTable({
+  name: 'app_settings',
+  hashKey: 'key',
+  columns: {
+    key: { type: 'string' },
+    value: { type: 'json' },
+    updatedAt: now(),
+  },
 });
 
-// ---------------------------------------------------------------------------
-// Relations (for Drizzle's relational query API)
-// ---------------------------------------------------------------------------
-export const eventsRelations = relations(events, ({ many }) => ({
-  tasks: many(tasks),
-  checklistItems: many(checklistItems),
-  attachments: many(attachments),
-  notes: many(notes),
-  comments: many(comments),
-  activityLogs: many(activityLogs),
-  eventPeople: many(eventPeople),
-  eventTags: many(eventTags),
-  eventAttendance: many(eventAttendance),
-}));
+/**
+ * Every table in the app, keyed by the name the repositories use. Iteration order
+ * is the safe creation/import order — parents before the items that reference them.
+ */
+export const TABLES = {
+  appUsers,
+  events,
+  tasks,
+  people,
+  eventPeople,
+  eventAttendance,
+  taskAssignees,
+  taskDependencies,
+  checklistItems,
+  checklistTemplates,
+  templateItems,
+  comments,
+  attachments,
+  notes,
+  tags,
+  eventTags,
+  taskTags,
+  activityLogs,
+  emailLogs,
+  notifications,
+  permissions,
+  appSettings,
+} as const;
 
-export const tasksRelations = relations(tasks, ({ one, many }) => ({
-  event: one(events, { fields: [tasks.eventId], references: [events.id] }),
-  assignees: many(taskAssignees),
-  checklistItems: many(checklistItems),
-  attachments: many(attachments),
-  comments: many(comments),
-  taskTags: many(taskTags),
-}));
-
-export const peopleRelations = relations(people, ({ many }) => ({
-  eventAssignments: many(eventPeople),
-  taskAssignments: many(taskAssignees),
-  eventAttendance: many(eventAttendance),
-}));
-
-export const eventPeopleRelations = relations(eventPeople, ({ one }) => ({
-  event: one(events, { fields: [eventPeople.eventId], references: [events.id] }),
-  person: one(people, { fields: [eventPeople.personId], references: [people.id] }),
-}));
-
-export const eventAttendanceRelations = relations(eventAttendance, ({ one }) => ({
-  event: one(events, { fields: [eventAttendance.eventId], references: [events.id] }),
-  person: one(people, { fields: [eventAttendance.personId], references: [people.id] }),
-  markedByUser: one(appUsers, { fields: [eventAttendance.markedByUserId], references: [appUsers.id] }),
-}));
-
-export const taskAssigneesRelations = relations(taskAssignees, ({ one }) => ({
-  task: one(tasks, { fields: [taskAssignees.taskId], references: [tasks.id] }),
-  person: one(people, { fields: [taskAssignees.personId], references: [people.id] }),
-}));
-
-export const checklistTemplatesRelations = relations(checklistTemplates, ({ many }) => ({
-  items: many(templateItems),
-}));
-
-export const templateItemsRelations = relations(templateItems, ({ one }) => ({
-  template: one(checklistTemplates, { fields: [templateItems.templateId], references: [checklistTemplates.id] }),
-}));
-
-export const tagsRelations = relations(tags, ({ many }) => ({
-  eventTags: many(eventTags),
-  taskTags: many(taskTags),
-}));
+export type TableKey = keyof typeof TABLES;

@@ -1,31 +1,28 @@
-import { and, eq } from 'drizzle-orm';
-import { db, schema } from '../lib/db';
-
-const { tags, eventTags, taskTags } = schema;
+import { db } from '../lib/db';
+import { sortByKey } from '../lib/query';
 
 export async function list() {
-  return db.select().from(tags).orderBy(tags.name);
+  return sortByKey(await db.tags.all(), 'name');
 }
 
 export async function create(name: string, color?: string) {
-  const [row] = await db.insert(tags).values({ name, color }).returning();
-  return row;
+  return db.tags.create({ name, color });
 }
 
 export async function attachToEvent(eventId: string, tagId: string) {
-  await db.insert(eventTags).values({ eventId, tagId }).onConflictDoNothing();
+  await db.eventTags.createIfNotExists({ eventId, tagId });
 }
 
 export async function detachFromEvent(eventId: string, tagId: string) {
-  await db.delete(eventTags).where(and(eq(eventTags.eventId, eventId), eq(eventTags.tagId, tagId)));
+  await db.eventTags.delete({ eventId, tagId });
 }
 
 export async function attachToTask(taskId: string, tagId: string) {
-  await db.insert(taskTags).values({ taskId, tagId }).onConflictDoNothing();
+  await db.taskTags.createIfNotExists({ taskId, tagId });
 }
 
 export async function detachFromTask(taskId: string, tagId: string) {
-  await db.delete(taskTags).where(and(eq(taskTags.taskId, taskId), eq(taskTags.tagId, tagId)));
+  await db.taskTags.delete({ taskId, tagId });
 }
 
 export const tagsService = { list, create, attachToEvent, detachFromEvent, attachToTask, detachFromTask };

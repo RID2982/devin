@@ -1,8 +1,6 @@
-import { and, count, eq, gte, inArray, isNull, lt } from 'drizzle-orm';
-import { db, schema } from '../lib/db';
+import { db, INDEXES } from '../lib/db';
 import { AppError } from '../lib/AppError';
-
-const { events, tasks, taskAssignees, people } = schema;
+import { isArchived } from '../lib/query';
 
 export async function monthly(month: string) {
   const [y, m] = month.split('-').map(Number);
@@ -10,12 +8,14 @@ export async function monthly(month: string) {
   const start = new Date(Date.UTC(y, m - 1, 1));
   const end = new Date(Date.UTC(y, m, 1));
 
-  const monthEvents = await db.select().from(events).where(and(isNull(events.archivedAt), gte(events.date, start), lt(events.date, end)));
-  const eventIds = monthEvents.map((e) => e.id);
+  const allEvents = await db.events.all();
+  const monthEvents = allEvents.filter(
+    (e) => !isArchived(e.archivedAt) && e.date >= start && e.date < end,
+  );
 
-  const relevantTasks = eventIds.length
-    ? await db.select().from(tasks).where(and(isNull(tasks.archivedAt), inArray(tasks.eventId, eventIds)))
-    : [];
+  const eventIds = new Set(monthEvents.map((e) => e.id));
+  const allTasks = eventIds.size ? await db.tasks.all() : [];
+  const relevantTasks = allTasks.filter((t) => !isArchived(t.archivedAt) && eventIds.has(t.eventId));
 
   return {
     month,
@@ -30,27 +30,46 @@ export async function monthly(month: string) {
 }
 
 export async function eventSummary(eventId: string) {
-  const [event] = await db.select().from(events).where(eq(events.id, eventId)).limit(1);
+  const event = await db.events.getById(eventId);
   if (!event) throw AppError.notFound('Event', eventId);
-  const eventTasks = await db.select().from(tasks).where(eq(tasks.eventId, eventId));
+
+  const eventTasks = await db.tasks.queryIndex(INDEXES.tasksByEvent, eventId);
+  const now = new Date();
+
   return {
     event,
     totalTasks: eventTasks.length,
     completedTasks: eventTasks.filter((t) => t.status === 'Completed').length,
-    overdueTasks: eventTasks.filter((t) => t.status !== 'Completed' && t.deadline && t.deadline < new Date()).length,
+    overdueTasks: eventTasks.filter((t) => t.status !== 'Completed' && t.deadline && t.deadline < now)
+      .length,
   };
 }
 
+/** Completed-task counts per assignee — the GROUP BY, done over three table reads. */
 export async function productivity() {
-  const rows = await db
-    .select({ personId: taskAssignees.personId, personName: people.name, completed: count() })
-    .from(taskAssignees)
-    .innerJoin(people, eq(taskAssignees.personId, people.id))
-    .innerJoin(tasks, eq(taskAssignees.taskId, tasks.id))
-    .where(eq(tasks.status, 'Completed'))
-    .groupBy(taskAssignees.personId, people.name);
+  const [assignments, allTasks, allPeople] = await Promise.all([
+    db.taskAssignees.all(),
+    db.tasks.all(),
+    db.people.all(),
+  ]);
 
-  return { byPerson: rows };
+  const completedTaskIds = new Set(
+    allTasks.filter((task) => task.status === 'Completed').map((task) => task.id),
+  );
+  const personById = new Map(allPeople.map((person) => [person.id, person]));
+
+  const counts = new Map<string, { personId: string; personName: string; completed: number }>();
+  for (const assignment of assignments) {
+    if (!completedTaskIds.has(assignment.taskId)) continue;
+    const person = personById.get(assignment.personId);
+    if (!person) continue; // INNER JOIN people
+
+    const entry = counts.get(person.id) ?? { personId: person.id, personName: person.name, completed: 0 };
+    entry.completed += 1;
+    counts.set(person.id, entry);
+  }
+
+  return { byPerson: [...counts.values()] };
 }
 
 export const reportsService = { monthly, eventSummary, productivity };

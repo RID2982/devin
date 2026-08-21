@@ -1,2 +1,2 @@
-export { db, pool } from '@app/database';
-export * as schema from '@app/database';
+export { db, INDEXES, schema, TABLES } from '@app/database';
+export type * from '@app/database';

@@ -1,14 +1,12 @@
-import { and, count, desc, eq, ne } from 'drizzle-orm';
 import { DEFAULT_EVENT_CHECKLIST } from '@app/shared';
-import { db, schema } from '../lib/db';
+import { db, INDEXES } from '../lib/db';
 import { AppError } from '../lib/AppError';
 import type { ListQuery } from '../lib/listQuery';
 import { buildMeta } from '../lib/listQuery';
+import { sortByKey } from '../lib/query';
 import { eventsRepository } from '../repositories/eventsRepository';
 import { activityLogService } from './activityLogService';
 import type { CreateEventInput, UpdateEventInput } from '../validators/events.schema';
-
-const { checklistItems, checklistTemplates, templateItems, activityLogs, eventPeople, people, tasks } = schema;
 
 export async function list(query: ListQuery) {
   const { rows, total } = await eventsRepository.list(query);
@@ -38,15 +36,14 @@ export async function create(input: CreateEventInput, actorUserId?: string) {
 
   let checklistLabels: string[] = [...DEFAULT_EVENT_CHECKLIST];
   if (input.templateId) {
-    const items = await db
-      .select()
-      .from(templateItems)
-      .where(eq(templateItems.templateId, input.templateId))
-      .orderBy(templateItems.order);
+    const items = sortByKey(
+      await db.templateItems.queryIndex(INDEXES.templateItemsByTemplate, input.templateId),
+      'order',
+    );
     if (items.length) checklistLabels = items.map((i) => i.label);
   }
 
-  await db.insert(checklistItems).values(
+  await db.checklistItems.createMany(
     checklistLabels.map((label, i) => ({ eventId: event.id, label, order: i })),
   );
 
@@ -62,15 +59,20 @@ export async function create(input: CreateEventInput, actorUserId?: string) {
 
 export async function update(id: string, input: UpdateEventInput, actorUserId?: string) {
   await getById(id);
-  const event = await eventsRepository.update(id, {
+  const event = (await eventsRepository.update(id, {
     ...input,
     budget: input.budget !== undefined ? input.budget.toString() : undefined,
-  });
+  }))!;
 
   if (input.status === 'Completed' || input.status === 'Cancelled') {
-    await db.update(tasks)
-      .set({ status: 'Cancelled', updatedAt: new Date() })
-      .where(and(eq(tasks.eventId, id), ne(tasks.status, 'Completed')));
+    // No `UPDATE ... WHERE event_id = ?` here — the event's tasks are read off
+    // the GSI and written back one by one.
+    const tasks = await db.tasks.queryIndex(INDEXES.tasksByEvent, id);
+    await Promise.all(
+      tasks
+        .filter((task) => task.status !== 'Completed')
+        .map((task) => db.tasks.updateById(task.id, { status: 'Cancelled', updatedAt: new Date() })),
+    );
   }
 
   await activityLogService.record({
@@ -82,10 +84,26 @@ export async function update(id: string, input: UpdateEventInput, actorUserId?: 
   return event;
 }
 
+/** Archives/restores an event and every task under it, together. */
+async function setArchivedCascade(id: string, archived: boolean) {
+  const updated = await eventsRepository.setArchived(id, archived);
+  const tasks = await db.tasks.queryIndex(INDEXES.tasksByEvent, id);
+
+  await Promise.all(
+    tasks.map((task) =>
+      db.tasks.updateById(task.id, {
+        archivedAt: archived ? new Date() : null,
+        updatedAt: new Date(),
+      }),
+    ),
+  );
+
+  return updated;
+}
+
 export async function archive(id: string, actorUserId?: string) {
   const event = await getById(id);
-  const updated = await eventsRepository.setArchived(id, true);
-  await db.update(tasks).set({ archivedAt: new Date(), updatedAt: new Date() }).where(eq(tasks.eventId, id));
+  const updated = await setArchivedCascade(id, true);
   await activityLogService.record({
     action: 'EVENT_ARCHIVED',
     summary: `Event "${event.name}" was archived`,
@@ -97,8 +115,7 @@ export async function archive(id: string, actorUserId?: string) {
 
 export async function restore(id: string, actorUserId?: string) {
   const event = await getById(id);
-  const updated = await eventsRepository.setArchived(id, false);
-  await db.update(tasks).set({ archivedAt: null, updatedAt: new Date() }).where(eq(tasks.eventId, id));
+  const updated = await setArchivedCascade(id, false);
   await activityLogService.record({
     action: 'EVENT_RESTORED',
     summary: `Event "${event.name}" was restored`,
@@ -110,12 +127,15 @@ export async function restore(id: string, actorUserId?: string) {
 
 export async function applyTemplate(eventId: string, templateId: string, actorUserId?: string) {
   const event = await getById(eventId);
-  const template = await db.query.checklistTemplates.findFirst({ where: eq(checklistTemplates.id, templateId) });
+  const template = await db.checklistTemplates.getById(templateId);
   if (!template) throw AppError.notFound('ChecklistTemplate', templateId);
 
-  const items = await db.select().from(templateItems).where(eq(templateItems.templateId, templateId)).orderBy(templateItems.order);
+  const items = sortByKey(
+    await db.templateItems.queryIndex(INDEXES.templateItemsByTemplate, templateId),
+    'order',
+  );
 
-  await db.insert(checklistItems).values(
+  await db.checklistItems.createMany(
     items.map((i) => ({ eventId, label: i.label, order: i.order })),
   );
 
@@ -131,33 +151,39 @@ export async function applyTemplate(eventId: string, templateId: string, actorUs
 
 export async function timeline(eventId: string) {
   await getById(eventId);
-  return db.select().from(activityLogs).where(eq(activityLogs.eventId, eventId)).orderBy(desc(activityLogs.createdAt));
+  return db.activityLogs.queryIndex(INDEXES.activityLogsByEvent, eventId, { ascending: false });
 }
 
 export async function summary(eventId: string) {
   const event = await getById(eventId);
 
-  const [[checklistTotal], [checklistDone], [taskTotal], [taskDone]] = await Promise.all([
-    db.select({ n: count() }).from(checklistItems).where(eq(checklistItems.eventId, eventId)),
-    db.select({ n: count() }).from(checklistItems).where(and(eq(checklistItems.eventId, eventId), eq(checklistItems.isDone, true))),
-    db.select({ n: count() }).from(schema.tasks).where(eq(schema.tasks.eventId, eventId)),
-    db.select({ n: count() }).from(schema.tasks).where(and(eq(schema.tasks.eventId, eventId), eq(schema.tasks.status, 'Completed'))),
+  const [checklist, tasks] = await Promise.all([
+    db.checklistItems.queryIndex(INDEXES.checklistItemsByEvent, eventId),
+    db.tasks.queryIndex(INDEXES.tasksByEvent, eventId),
   ]);
 
-  const completionPercent = checklistTotal.n > 0 ? Math.round((checklistDone.n / checklistTotal.n) * 100) : 0;
+  const checklistDone = checklist.filter((item) => item.isDone).length;
+  const tasksDone = tasks.filter((task) => task.status === 'Completed').length;
+  const completionPercent = checklist.length > 0 ? Math.round((checklistDone / checklist.length) * 100) : 0;
 
   return {
     event,
-    checklist: { total: checklistTotal.n, done: checklistDone.n },
-    tasks: { total: taskTotal.n, done: taskDone.n },
+    checklist: { total: checklist.length, done: checklistDone },
+    tasks: { total: tasks.length, done: tasksDone },
     completionPercent,
   };
 }
 
-export async function addPerson(eventId: string, personId: string, roleOnEvent: string | undefined, actorUserId?: string) {
+export async function addPerson(
+  eventId: string,
+  personId: string,
+  roleOnEvent: string | undefined,
+  actorUserId?: string,
+) {
   const event = await getById(eventId);
-  await db.insert(eventPeople).values({ eventId, personId, roleOnEvent }).onConflictDoNothing();
-  const [person] = await db.select().from(people).where(eq(people.id, personId)).limit(1);
+  await db.eventPeople.createIfNotExists({ eventId, personId, roleOnEvent });
+  const person = await db.people.getById(personId);
+
   await activityLogService.record({
     action: 'PERSON_ASSIGNED',
     summary: `${person?.name ?? 'Someone'} added to "${event.name}"`,
@@ -168,8 +194,20 @@ export async function addPerson(eventId: string, personId: string, roleOnEvent: 
 }
 
 export async function removePerson(eventId: string, personId: string) {
-  await db.delete(eventPeople).where(and(eq(eventPeople.eventId, eventId), eq(eventPeople.personId, personId)));
+  await db.eventPeople.delete({ eventId, personId });
   return getById(eventId);
 }
 
-export const eventsService = { list, getById, create, update, archive, restore, applyTemplate, timeline, summary, addPerson, removePerson };
+export const eventsService = {
+  list,
+  getById,
+  create,
+  update,
+  archive,
+  restore,
+  applyTemplate,
+  timeline,
+  summary,
+  addPerson,
+  removePerson,
+};

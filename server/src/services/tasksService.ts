@@ -1,13 +1,10 @@
-import { eq, and } from 'drizzle-orm';
-import { db, schema } from '../lib/db';
+import { db } from '../lib/db';
 import { AppError } from '../lib/AppError';
 import { buildMeta, type ListQuery } from '../lib/listQuery';
 import { tasksRepository } from '../repositories/tasksRepository';
 import { activityLogService } from './activityLogService';
 import { emailService } from './email';
 import type { CreateTaskInput, UpdateTaskInput } from '../validators/tasks.schema';
-
-const { taskAssignees, taskDependencies, people, events } = schema;
 
 export async function list(query: ListQuery) {
   const { rows, total } = await tasksRepository.list(query);
@@ -32,9 +29,15 @@ export async function create(input: CreateTaskInput, actorUserId?: string) {
   return task;
 }
 
+/** Every person assigned to a task, resolved through the join table. */
+async function assigneesOf(taskId: string) {
+  const assignments = await db.taskAssignees.query(taskId);
+  return db.people.getMany(assignments.map((row) => row.personId));
+}
+
 export async function update(id: string, input: UpdateTaskInput, actorUserId?: string) {
   const existing = await getById(id);
-  const task = await tasksRepository.update(id, input);
+  const task = (await tasksRepository.update(id, input))!;
 
   if (input.status && input.status !== existing.status) {
     await activityLogService.record({
@@ -45,10 +48,17 @@ export async function update(id: string, input: UpdateTaskInput, actorUserId?: s
       actorUserId,
     });
     if (input.status === 'Completed') {
-      const [event] = await db.select().from(events).where(eq(events.id, task.eventId)).limit(1);
-      const assignees = await db.select({ email: people.email, name: people.name }).from(taskAssignees).innerJoin(people, eq(taskAssignees.personId, people.id)).where(eq(taskAssignees.taskId, id));
-      for (const a of assignees) {
-        if (a.email) await emailService.send({ to: a.email, templateKey: 'task-completed', data: { taskTitle: task.title, eventName: event?.name }, relatedEventId: task.eventId, relatedTaskId: task.id });
+      const event = await db.events.getById(task.eventId);
+      for (const person of await assigneesOf(id)) {
+        if (person.email) {
+          await emailService.send({
+            to: person.email,
+            templateKey: 'task-completed',
+            data: { taskTitle: task.title, eventName: event?.name },
+            relatedEventId: task.eventId,
+            relatedTaskId: task.id,
+          });
+        }
       }
     }
   } else {
@@ -71,46 +81,89 @@ export async function setStatus(id: string, status: string, actorUserId?: string
 export async function archive(id: string, actorUserId?: string) {
   const task = await getById(id);
   const updated = await tasksRepository.setArchived(id, true);
-  await activityLogService.record({ action: 'TASK_UPDATED', summary: `Task "${task.title}" was archived`, eventId: task.eventId, taskId: id, actorUserId });
+  await activityLogService.record({
+    action: 'TASK_UPDATED',
+    summary: `Task "${task.title}" was archived`,
+    eventId: task.eventId,
+    taskId: id,
+    actorUserId,
+  });
   return updated;
 }
 
 export async function restore(id: string, actorUserId?: string) {
   const task = await getById(id);
   const updated = await tasksRepository.setArchived(id, false);
-  await activityLogService.record({ action: 'TASK_UPDATED', summary: `Task "${task.title}" was restored`, eventId: task.eventId, taskId: id, actorUserId });
+  await activityLogService.record({
+    action: 'TASK_UPDATED',
+    summary: `Task "${task.title}" was restored`,
+    eventId: task.eventId,
+    taskId: id,
+    actorUserId,
+  });
   return updated;
 }
 
 export async function addAssignee(taskId: string, personId: string, actorUserId?: string) {
   const task = await getById(taskId);
-  await db.insert(taskAssignees).values({ taskId, personId }).onConflictDoNothing();
+  await db.taskAssignees.createIfNotExists({ taskId, personId });
 
-  const [person] = await db.select().from(people).where(eq(people.id, personId)).limit(1);
-  const [event] = await db.select().from(events).where(eq(events.id, task.eventId)).limit(1);
+  const [person, event] = await Promise.all([
+    db.people.getById(personId),
+    db.events.getById(task.eventId),
+  ]);
 
-  await activityLogService.record({ action: 'TASK_ASSIGNED', summary: `${person?.name ?? 'Someone'} assigned to "${task.title}"`, eventId: task.eventId, taskId, actorUserId });
+  await activityLogService.record({
+    action: 'TASK_ASSIGNED',
+    summary: `${person?.name ?? 'Someone'} assigned to "${task.title}"`,
+    eventId: task.eventId,
+    taskId,
+    actorUserId,
+  });
   if (person?.email) {
-    await emailService.send({ to: person.email, templateKey: 'task-assigned', data: { taskTitle: task.title, eventName: event?.name, personName: person.name, deadline: task.deadline }, relatedEventId: task.eventId, relatedTaskId: taskId });
+    await emailService.send({
+      to: person.email,
+      templateKey: 'task-assigned',
+      data: {
+        taskTitle: task.title,
+        eventName: event?.name,
+        personName: person.name,
+        deadline: task.deadline,
+      },
+      relatedEventId: task.eventId,
+      relatedTaskId: taskId,
+    });
   }
   return getById(taskId);
 }
 
 export async function removeAssignee(taskId: string, personId: string) {
-  await db.delete(taskAssignees).where(and(eq(taskAssignees.taskId, taskId), eq(taskAssignees.personId, personId)));
+  await db.taskAssignees.delete({ taskId, personId });
   return getById(taskId);
 }
 
 export async function addDependency(taskId: string, dependsOnTaskId: string) {
   await getById(taskId);
   await getById(dependsOnTaskId);
-  await db.insert(taskDependencies).values({ taskId, dependsOnTaskId }).onConflictDoNothing();
+  await db.taskDependencies.createIfNotExists({ taskId, dependsOnTaskId });
   return getById(taskId);
 }
 
 export async function removeDependency(taskId: string, dependsOnTaskId: string) {
-  await db.delete(taskDependencies).where(and(eq(taskDependencies.taskId, taskId), eq(taskDependencies.dependsOnTaskId, dependsOnTaskId)));
+  await db.taskDependencies.delete({ taskId, dependsOnTaskId });
   return getById(taskId);
 }
 
-export const tasksService = { list, getById, create, update, setStatus, archive, restore, addAssignee, removeAssignee, addDependency, removeDependency };
+export const tasksService = {
+  list,
+  getById,
+  create,
+  update,
+  setStatus,
+  archive,
+  restore,
+  addAssignee,
+  removeAssignee,
+  addDependency,
+  removeDependency,
+};

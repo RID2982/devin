@@ -8,7 +8,7 @@ For AWS-specific infrastructure choices (EC2 vs ECS Fargate), see [`AWS.md`](AWS
 npm run build
 ```
 
-Runs, in order: `shared` (type-only, no real build artifact needed by consumers using it as source) → `database` (compiles migration/seed helpers) → `server` (`tsc` to `server/dist/`) → `client` (`tsc -b && vite build` to `client/dist/`).
+Runs, in order: `shared` (type-only, no real build artifact needed by consumers using it as source) → `database` (compiles the table definitions and admin scripts) → `server` (`tsc` to `server/dist/`) → `client` (`tsc -b && vite build` to `client/dist/`).
 
 ## Running in production
 
@@ -25,7 +25,10 @@ NODE_ENV=production node server/dist/server.js
 
 | Variable | Where | Notes |
 |---|---|---|
-| `DATABASE_URL` | server, database | Points at RDS or your production Postgres |
+| `AWS_REGION` | server, database | The region your DynamoDB tables live in |
+| `DYNAMODB_TABLE_PREFIX` | server, database | Namespaces the 22 table names; must match what `db:migrate` created |
+| `DYNAMODB_ENDPOINT` | server, database | **Leave unset in production.** Setting it points the SDK at DynamoDB Local instead of AWS |
+| AWS credentials | server, database | Prefer an IAM role (ECS task role / EC2 instance profile) over `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` |
 | `PORT` | server | Defaults to 4000 |
 | `CLIENT_ORIGIN` | server | Must match the client's real origin (CORS) |
 | `UPLOAD_DIR` | server | Persistent disk path; back this up or migrate to S3 |
@@ -39,14 +42,23 @@ NODE_ENV=production node server/dist/server.js
 ## Database migrations in production
 
 ```bash
-npm run db:generate -w database   # after any schema.ts change, generates SQL — commit the output
-npm run db:migrate  -w database   # applies pending migrations; run this during deploy, before starting the new server version
+npm run db:migrate -w database   # creates any missing table or index; run during deploy, before starting the new server version
 ```
+
+DynamoDB has no migration history to replay — creating a table *is* the schema — so this one command is the whole story and is safe to re-run on every deploy. It creates tables that don't exist yet and adds any index newly declared in `database/src/schema.ts`; it never drops or rewrites anything.
+
+What it does **not** do is backfill or reshape existing items. Adding a column with a default in `schema.ts` only affects items written afterwards — DynamoDB is schemaless per item, and the read path fills any missing declared attribute with `null`, so old items stay readable. A change that genuinely needs existing data rewritten (renaming an attribute, changing a table's primary key) needs its own one-off script.
+
+### IAM permissions the server needs
+
+On the prefixed tables and their indexes: `dynamodb:GetItem`, `PutItem`, `UpdateItem`, `DeleteItem`, `Query`, `Scan`, `BatchWriteItem`. `db:migrate` additionally needs `CreateTable`, `DescribeTable`, and `UpdateTable` — worth keeping on a deploy role rather than the running server's role.
 
 ## Pre-launch checklist
 
 - [ ] `ADMIN_EMAIL` / `ADMIN_PASSWORD` changed from the `.env.example` defaults, and `JWT_SECRET` is a real random value
-- [ ] `DATABASE_URL` points at a production Postgres with backups enabled
+- [ ] `DYNAMODB_ENDPOINT` is **unset** (a leftover `localhost:8000` silently points production at nothing)
+- [ ] `npm run db:migrate` has been run against the production account, and `DYNAMODB_TABLE_PREFIX` matches
+- [ ] Point-in-time recovery enabled on the tables (DynamoDB's backup story — off by default)
 - [ ] `CLIENT_ORIGIN` matches the real client URL (CORS will reject requests otherwise)
 - [ ] Served over HTTPS (required for the PWA install prompt and service worker)
 - [ ] `UPLOAD_DIR` is on persistent, backed-up storage

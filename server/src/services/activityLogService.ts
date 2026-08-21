@@ -1,5 +1,5 @@
 import type { ActivityAction } from '@app/shared';
-import { db, schema } from '../lib/db';
+import { db } from '../lib/db';
 
 interface RecordActivityInput {
   action: ActivityAction;
@@ -16,7 +16,7 @@ interface RecordActivityInput {
  * Timeline tab can never silently miss an entry.
  */
 export async function record(input: RecordActivityInput) {
-  await db.insert(schema.activityLogs).values({
+  await db.activityLogs.create({
     action: input.action,
     summary: input.summary,
     eventId: input.eventId,

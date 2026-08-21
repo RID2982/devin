@@ -1,21 +1,44 @@
 services:
-  postgres:
-    image: postgres:16-alpine
-    container_name: eventmgmt-postgres
+  dynamodb:
+    image: amazon/dynamodb-local:latest
+    container_name: eventmgmt-dynamodb
     restart: unless-stopped
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER:-myuser}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-mypassword}
-      POSTGRES_DB: ${POSTGRES_DB:-eventmgmt}
+    # -sharedDb puts every client on one database file regardless of credentials,
+    # and -dbPath writes it to the mounted volume so data survives a restart.
+    command: ['-jar', 'DynamoDBLocal.jar', '-sharedDb', '-dbPath', './data']
+    working_dir: /home/dynamodblocal
+    user: root
     ports:
-      - '${POSTGRES_PORT:-5432}:5432'
+      - '${DYNAMODB_PORT:-8000}:8000'
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - dynamodata:/home/dynamodblocal/data
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-myuser} -d ${POSTGRES_DB:-eventmgmt}']
+      # DynamoDB Local answers unauthenticated requests with 400, which is proof
+      # enough that the port is live and serving.
+      test:
+        [
+          'CMD-SHELL',
+          'curl -s -o /dev/null -w "%{http_code}" http://localhost:8000 | grep -q 400',
+        ]
       interval: 5s
       timeout: 5s
       retries: 10
 
+  # Optional web UI for browsing the local tables — the DynamoDB equivalent of
+  # what `db:studio` used to give. Start it with:  docker compose up -d dynamodb-admin
+  dynamodb-admin:
+    image: aaronshaf/dynamodb-admin:latest
+    container_name: eventmgmt-dynamodb-admin
+    restart: unless-stopped
+    depends_on:
+      - dynamodb
+    environment:
+      DYNAMO_ENDPOINT: http://dynamodb:8000
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-local}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-local}
+    ports:
+      - '${DYNAMODB_ADMIN_PORT:-8001}:8001'
+
 volumes:
-  pgdata:
+  dynamodata:

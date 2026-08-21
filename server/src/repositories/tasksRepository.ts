@@ -1,53 +1,49 @@
-import { and, asc, desc, eq, ilike, isNotNull, isNull, or, sql, SQL } from 'drizzle-orm';
-import { db, schema } from '../lib/db';
+import type { Task } from '@app/database';
+import { db, INDEXES, schema } from '../lib/db';
+import { ilikeAny, isArchived, paginate, sortRows } from '../lib/query';
 import type { ListQuery } from '../lib/listQuery';
 
-const { tasks } = schema;
-
-function buildWhere(query: ListQuery): SQL | undefined {
-  const conditions: SQL[] = [];
-  conditions.push(query.archived ? isNotNull(tasks.archivedAt) : isNull(tasks.archivedAt));
-
-  if (query.filters.status) conditions.push(eq(tasks.status, query.filters.status as never));
-  if (query.filters.priority) conditions.push(eq(tasks.priority, query.filters.priority as never));
-  if (query.filters.eventId) conditions.push(eq(tasks.eventId, query.filters.eventId));
-  if (query.search) conditions.push(or(ilike(tasks.title, `%${query.search}%`), ilike(tasks.description, `%${query.search}%`))!);
-
-  return conditions.length ? and(...conditions) : undefined;
+function matches(task: Task, query: ListQuery): boolean {
+  if (isArchived(task.archivedAt) !== query.archived) return false;
+  if (query.filters.status && task.status !== query.filters.status) return false;
+  if (query.filters.priority && task.priority !== query.filters.priority) return false;
+  if (query.search && !ilikeAny(query.search, task.title, task.description)) return false;
+  return true;
 }
 
-const SORTABLE = { deadline: tasks.deadline, priority: tasks.priority, status: tasks.status, order: tasks.order, createdAt: tasks.createdAt } as const;
+const SORTABLE = ['deadline', 'priority', 'status', 'order', 'createdAt'] as const;
 
 export async function list(query: ListQuery) {
-  const where = buildWhere(query);
-  const sortCol = SORTABLE[(query.sortBy as keyof typeof SORTABLE) ?? 'order'] ?? tasks.order;
-  const orderBy = query.sortDir === 'desc' ? desc(sortCol) : asc(sortCol);
+  // Filtering by event is the one access pattern with a key behind it, so it
+  // reads the GSI instead of the whole table.
+  const all = query.filters.eventId
+    ? await db.tasks.queryIndex(INDEXES.tasksByEvent, query.filters.eventId)
+    : await db.tasks.all();
 
-  const [rows, [{ count }]] = await Promise.all([
-    db.select().from(tasks).where(where).orderBy(orderBy).limit(query.pageSize).offset((query.page - 1) * query.pageSize),
-    db.select({ count: sql<number>`count(*)::int` }).from(tasks).where(where),
-  ]);
+  const filtered = all.filter((task) => matches(task, query));
 
-  return { rows, total: count };
+  const sortBy = (SORTABLE as readonly string[]).includes(query.sortBy ?? '')
+    ? (query.sortBy as string)
+    : 'order';
+  const sorted = sortRows(filtered, schema.tasks, sortBy, query.sortDir);
+
+  return { rows: paginate(sorted, query.page, query.pageSize), total: filtered.length };
 }
 
 export async function findById(id: string) {
-  return db.query.tasks.findFirst({ where: eq(tasks.id, id) });
+  return db.tasks.getById(id);
 }
 
-export async function create(values: typeof tasks.$inferInsert) {
-  const [row] = await db.insert(tasks).values(values).returning();
-  return row;
+export async function create(values: Partial<Task>) {
+  return db.tasks.create(values);
 }
 
-export async function update(id: string, values: Partial<typeof tasks.$inferInsert>) {
-  const [row] = await db.update(tasks).set({ ...values, updatedAt: new Date() }).where(eq(tasks.id, id)).returning();
-  return row;
+export async function update(id: string, values: Partial<Task>) {
+  return db.tasks.updateById(id, { ...values, updatedAt: new Date() });
 }
 
 export async function setArchived(id: string, archived: boolean) {
-  const [row] = await db.update(tasks).set({ archivedAt: archived ? new Date() : null, updatedAt: new Date() }).where(eq(tasks.id, id)).returning();
-  return row;
+  return db.tasks.updateById(id, { archivedAt: archived ? new Date() : null, updatedAt: new Date() });
 }
 
 export const tasksRepository = { list, findById, create, update, setArchived };

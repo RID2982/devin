@@ -1,8 +1,6 @@
-import { and, count, desc, eq, gte, isNull, lt, lte, ne } from 'drizzle-orm';
 import { db, schema } from '../lib/db';
+import { isArchived, sortByKey, sortRows } from '../lib/query';
 import { attentionService } from './attentionService';
-
-const { events, tasks, activityLogs } = schema;
 
 function startOfToday() {
   const d = new Date();
@@ -28,51 +26,60 @@ function in7Days() {
   return d;
 }
 
+/**
+ * Eight counters and five widget lists. Under Postgres that was thirteen
+ * queries; here it is three table reads (plus the attention buckets), with every
+ * figure computed from the same in-memory snapshot — which also means the
+ * numbers are consistent with each other, as they were inside one connection.
+ */
 export async function getOverview() {
-  const activeEvent = isNull(events.archivedAt);
-  const activeTask = isNull(tasks.archivedAt);
   const now = new Date();
 
-  const [
-    [totalEvents],
-    [totalTasks],
-    [pendingTasks],
-    [completedTasks],
-    [overdueTasks],
-    [highPriorityTasks],
-    [thisMonthEvents],
-    [upcomingDeadlines],
-    upcomingEvents,
-    todaysTasks,
-    recentlyCompleted,
-    recentActivity,
-    attentionItems,
-  ] = await Promise.all([
-    db.select({ n: count() }).from(events).where(activeEvent),
-    db.select({ n: count() }).from(tasks).where(activeTask),
-    db.select({ n: count() }).from(tasks).where(and(activeTask, eq(tasks.status, 'Pending'))),
-    db.select({ n: count() }).from(tasks).where(and(activeTask, eq(tasks.status, 'Completed'))),
-    db.select({ n: count() }).from(tasks).where(and(activeTask, ne(tasks.status, 'Completed'), lt(tasks.deadline, now))),
-    db.select({ n: count() }).from(tasks).where(and(activeTask, ne(tasks.status, 'Completed'), eq(tasks.priority, 'High'))),
-    db.select({ n: count() }).from(events).where(and(activeEvent, gte(events.date, startOfMonth()), lt(events.date, startOfNextMonth()))),
-    db.select({ n: count() }).from(tasks).where(and(activeTask, ne(tasks.status, 'Completed'), gte(tasks.deadline, now), lte(tasks.deadline, in7Days()))),
-    db.select().from(events).where(and(activeEvent, gte(events.date, now))).orderBy(events.date).limit(6),
-    db.select().from(tasks).where(and(activeTask, gte(tasks.deadline, startOfToday()), lt(tasks.deadline, endOfToday()))).orderBy(tasks.priority),
-    db.select().from(tasks).where(and(activeTask, eq(tasks.status, 'Completed'))).orderBy(desc(tasks.updatedAt)).limit(6),
-    db.select().from(activityLogs).orderBy(desc(activityLogs.createdAt)).limit(10),
+  const [allEvents, allTasks, allActivity, attentionItems] = await Promise.all([
+    db.events.all(),
+    db.tasks.all(),
+    db.activityLogs.all(),
     attentionService.getAttentionItems(),
   ]);
 
+  const activeEvents = allEvents.filter((e) => !isArchived(e.archivedAt));
+  const activeTasks = allTasks.filter((t) => !isArchived(t.archivedAt));
+  const openTasks = activeTasks.filter((t) => t.status !== 'Completed');
+
+  const upcomingEvents = sortByKey(
+    activeEvents.filter((e) => e.date >= now),
+    'date',
+  ).slice(0, 6);
+
+  const todaysTasks = sortRows(
+    activeTasks.filter(
+      (t) => t.deadline !== null && t.deadline >= startOfToday() && t.deadline < endOfToday(),
+    ),
+    schema.tasks,
+    'priority',
+  );
+
+  const recentlyCompleted = sortByKey(
+    activeTasks.filter((t) => t.status === 'Completed'),
+    'updatedAt',
+    'desc',
+  ).slice(0, 6);
+
+  const recentActivity = sortByKey(allActivity, 'createdAt', 'desc').slice(0, 10);
+
   return {
     stats: {
-      totalEvents: totalEvents.n,
-      totalTasks: totalTasks.n,
-      pendingTasks: pendingTasks.n,
-      completedTasks: completedTasks.n,
-      overdueTasks: overdueTasks.n,
-      highPriorityTasks: highPriorityTasks.n,
-      thisMonthEvents: thisMonthEvents.n,
-      upcomingDeadlines: upcomingDeadlines.n,
+      totalEvents: activeEvents.length,
+      totalTasks: activeTasks.length,
+      pendingTasks: activeTasks.filter((t) => t.status === 'Pending').length,
+      completedTasks: activeTasks.filter((t) => t.status === 'Completed').length,
+      overdueTasks: openTasks.filter((t) => t.deadline !== null && t.deadline < now).length,
+      highPriorityTasks: openTasks.filter((t) => t.priority === 'High').length,
+      thisMonthEvents: activeEvents.filter((e) => e.date >= startOfMonth() && e.date < startOfNextMonth())
+        .length,
+      upcomingDeadlines: openTasks.filter(
+        (t) => t.deadline !== null && t.deadline >= now && t.deadline <= in7Days(),
+      ).length,
     },
     widgets: {
       upcomingEvents,

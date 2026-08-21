@@ -11,8 +11,16 @@ const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   PORT: z.coerce.number().default(4000),
   CLIENT_ORIGIN: z.string().default('http://localhost:5173'),
-  DATABASE_URL: z.string(),
   UPLOAD_DIR: z.string().default('./uploads'),
+
+  // ---- DynamoDB ----
+  // DYNAMODB_ENDPOINT points at DynamoDB Local in development; leaving it unset
+  // in production means the SDK talks to real DynamoDB with the ambient
+  // credentials (task/instance role, shared profile, or env vars).
+  AWS_REGION: z.string().default('us-east-1'),
+  DYNAMODB_ENDPOINT: z.string().optional(),
+  DYNAMODB_TABLE_PREFIX: z.string().default('eventmgmt_'),
+
   EMAIL_TRANSPORT: z.enum(['console', 'file']).default('console'),
   EMAIL_FROM: z.string().default('noreply@example.com'),
 
