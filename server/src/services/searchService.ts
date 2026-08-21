@@ -1,18 +1,24 @@
-import { ilike, isNull, and, or } from 'drizzle-orm';
-import { db, schema } from '../lib/db';
-
-const { events, tasks, people } = schema;
+import { db } from '../lib/db';
+import { ilikeAny, isArchived } from '../lib/query';
 
 export async function search(q: string) {
-  const like = `%${q}%`;
-
-  const [matchedEvents, matchedTasks, matchedPeople] = await Promise.all([
-    db.select().from(events).where(and(isNull(events.archivedAt), or(ilike(events.name, like), ilike(events.venue, like), ilike(events.category, like)))).limit(10),
-    db.select().from(tasks).where(and(isNull(tasks.archivedAt), or(ilike(tasks.title, like), ilike(tasks.description, like)))).limit(10),
-    db.select().from(people).where(and(isNull(people.archivedAt), or(ilike(people.name, like), ilike(people.email, like), ilike(people.role, like)))).limit(10),
+  const [allEvents, allTasks, allPeople] = await Promise.all([
+    db.events.all(),
+    db.tasks.all(),
+    db.people.all(),
   ]);
 
-  return { events: matchedEvents, tasks: matchedTasks, people: matchedPeople };
+  return {
+    events: allEvents
+      .filter((e) => !isArchived(e.archivedAt) && ilikeAny(q, e.name, e.venue, e.category))
+      .slice(0, 10),
+    tasks: allTasks
+      .filter((t) => !isArchived(t.archivedAt) && ilikeAny(q, t.title, t.description))
+      .slice(0, 10),
+    people: allPeople
+      .filter((p) => !isArchived(p.archivedAt) && ilikeAny(q, p.name, p.email, p.role))
+      .slice(0, 10),
+  };
 }
 
 export const searchService = { search };

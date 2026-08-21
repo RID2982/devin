@@ -1,26 +1,31 @@
-import { eq } from 'drizzle-orm';
-import { db, schema } from '../lib/db';
+import { db, INDEXES } from '../lib/db';
 import { AppError } from '../lib/AppError';
+import { sortByKey } from '../lib/query';
 import { activityLogService } from './activityLogService';
 
-const { comments, events, tasks } = schema;
-
 export async function listFor(eventId?: string, taskId?: string) {
-  if (eventId) return db.select().from(comments).where(eq(comments.eventId, eventId)).orderBy(comments.createdAt);
-  if (taskId) return db.select().from(comments).where(eq(comments.taskId, taskId)).orderBy(comments.createdAt);
+  if (eventId) {
+    const rows = await db.comments.queryIndex(INDEXES.commentsByEvent, eventId);
+    return sortByKey(rows, 'createdAt');
+  }
+  if (taskId) {
+    const rows = await db.comments.queryIndex(INDEXES.commentsByTask, taskId);
+    return sortByKey(rows, 'createdAt');
+  }
   throw AppError.badRequest('eventId or taskId query param is required');
 }
 
-export async function create(input: { body: string; eventId?: string; taskId?: string }, actorUserId?: string) {
-  const [row] = await db.insert(comments).values({ ...input, authorUserId: actorUserId }).returning();
+export async function create(
+  input: { body: string; eventId?: string; taskId?: string },
+  actorUserId?: string,
+) {
+  const row = await db.comments.create({ ...input, authorUserId: actorUserId });
 
   let subject = '';
   if (row.eventId) {
-    const [e] = await db.select({ name: events.name }).from(events).where(eq(events.id, row.eventId)).limit(1);
-    subject = e?.name ?? '';
+    subject = (await db.events.getById(row.eventId))?.name ?? '';
   } else if (row.taskId) {
-    const [t] = await db.select({ title: tasks.title }).from(tasks).where(eq(tasks.id, row.taskId)).limit(1);
-    subject = t?.title ?? '';
+    subject = (await db.tasks.getById(row.taskId))?.title ?? '';
   }
 
   await activityLogService.record({
@@ -35,13 +40,13 @@ export async function create(input: { body: string; eventId?: string; taskId?: s
 }
 
 export async function update(id: string, body: string) {
-  const [row] = await db.update(comments).set({ body, updatedAt: new Date() }).where(eq(comments.id, id)).returning();
+  const row = await db.comments.updateById(id, { body, updatedAt: new Date() });
   if (!row) throw AppError.notFound('Comment', id);
   return row;
 }
 
 export async function remove(id: string) {
-  await db.delete(comments).where(eq(comments.id, id));
+  await db.comments.deleteById(id);
 }
 
 export const commentsService = { listFor, create, update, remove };

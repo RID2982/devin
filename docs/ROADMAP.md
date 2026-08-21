@@ -12,7 +12,7 @@ Everything below is deliberately **not** built yet. The architecture was kept ad
 - **Cloud storage for attachments.** Local disk (`server/uploads/`) in Phase 1; swap to S3 behind the same upload/download interface later.
 - **WhatsApp/Telegram notification channels.**
 - **Voice commands.**
-- **Full-text search.** Current search uses Postgres `ILIKE`; upgrade to `tsvector`/trigram indexes if it ever feels slow at real scale.
+- **Full-text search.** Current search scans the table and substring-matches in the service layer (`lib/query.ts`), which is what DynamoDB leaves you for non-key predicates. Front it with OpenSearch — or DynamoDB Streams into an inverted-index table — if it ever feels slow at real scale.
 - **A literal `month_settings(year, month)` table** — only if a genuine per-month attribute (e.g. a monthly budget cap) is ever needed. Until then, month/year is always derived from `events.date`.
 - **Final AWS architecture** (EC2+RDS vs ECS Fargate) — both are documented as options in `AWS.md`; nothing forces the choice yet since the server is deployment-agnostic.
 - **Infrastructure as code** (CDK/Terraform/CloudFormation) and a CI/CD pipeline.

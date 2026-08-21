@@ -1,4 +1,4 @@
-import { db, schema } from '../../lib/db';
+import { db } from '../../lib/db';
 import type { EmailSendInput, EmailTransport } from './EmailService';
 import { ConsoleTransport } from './ConsoleTransport';
 import { templates } from './templates';
@@ -12,7 +12,7 @@ async function send(input: EmailSendInput) {
 
   const status = await transport.send({ ...input, subject, body });
 
-  await db.insert(schema.emailLogs).values({
+  await db.emailLogs.create({
     to: input.to,
     subject,
     templateKey: input.templateKey,

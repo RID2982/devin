@@ -1,82 +1,76 @@
-import { and, asc, desc, eq, gte, ilike, isNull, isNotNull, lt, or, sql, SQL } from 'drizzle-orm';
+import type { Event, EventPerson, Person } from '@app/database';
 import { db, schema } from '../lib/db';
+import { ilikeAny, isArchived, paginate, sortRows } from '../lib/query';
 import type { ListQuery } from '../lib/listQuery';
 
-const { events } = schema;
+// Events are listed by whichever column the UI picked, with free-text search and
+// month filtering — none of which is a DynamoDB key access pattern. So the table
+// is read and narrowed in memory. That is fine at this app's scale (one club's
+// events); if the table ever grows past a few thousand items, the move is a GSI
+// on `date` and a Query bounded by the visible range.
 
-function buildWhere(query: ListQuery): SQL | undefined {
-  const conditions: SQL[] = [];
+function matches(event: Event, query: ListQuery): boolean {
+  if (isArchived(event.archivedAt) !== query.archived) return false;
 
-  conditions.push(query.archived ? isNotNull(events.archivedAt) : isNull(events.archivedAt));
+  if (query.filters.status && event.status !== query.filters.status) return false;
+  if (query.filters.priority && event.priority !== query.filters.priority) return false;
+  if (query.filters.category && event.category !== query.filters.category) return false;
 
-  if (query.filters.status) conditions.push(eq(events.status, query.filters.status as never));
-  if (query.filters.priority) conditions.push(eq(events.priority, query.filters.priority as never));
-  if (query.filters.category) conditions.push(eq(events.category, query.filters.category));
   if (query.filters.month) {
     const [y, m] = query.filters.month.split('-').map(Number);
     const start = new Date(Date.UTC(y, m - 1, 1));
     const end = new Date(Date.UTC(y, m, 1));
-    conditions.push(and(gte(events.date, start), lt(events.date, end))!);
-  }
-  if (query.search) {
-    const like = `%${query.search}%`;
-    conditions.push(
-      or(ilike(events.name, like), ilike(events.venue, like), ilike(events.description, like))!,
-    );
+    if (!(event.date >= start && event.date < end)) return false;
   }
 
-  return conditions.length ? and(...conditions) : undefined;
+  if (query.search && !ilikeAny(query.search, event.name, event.venue, event.description)) {
+    return false;
+  }
+
+  return true;
 }
 
-const SORTABLE = { date: events.date, name: events.name, priority: events.priority, status: events.status, createdAt: events.createdAt } as const;
+const SORTABLE = ['date', 'name', 'priority', 'status', 'createdAt'] as const;
 
 export async function list(query: ListQuery) {
-  const where = buildWhere(query);
-  const sortCol = SORTABLE[(query.sortBy as keyof typeof SORTABLE) ?? 'date'] ?? events.date;
-  const orderBy = query.sortDir === 'desc' ? desc(sortCol) : asc(sortCol);
+  const all = await db.events.all();
+  const filtered = all.filter((event) => matches(event, query));
 
-  const [rows, [{ count }]] = await Promise.all([
-    db
-      .select()
-      .from(events)
-      .where(where)
-      .orderBy(orderBy)
-      .limit(query.pageSize)
-      .offset((query.page - 1) * query.pageSize),
-    db.select({ count: sql<number>`count(*)::int` }).from(events).where(where),
-  ]);
+  const sortBy = (SORTABLE as readonly string[]).includes(query.sortBy ?? '')
+    ? (query.sortBy as string)
+    : 'date';
+  const sorted = sortRows(filtered, schema.events, sortBy, query.sortDir);
 
-  return { rows, total: count };
+  return { rows: paginate(sorted, query.page, query.pageSize), total: filtered.length };
 }
 
+/** The event plus its roster, matching the nested shape the detail page reads. */
 export async function findById(id: string) {
-  return db.query.events.findFirst({
-    where: eq(events.id, id),
-    with: { eventPeople: { with: { person: true } } },
-  });
+  const event = await db.events.getById(id);
+  if (!event) return undefined;
+
+  const roster = await db.eventPeople.query(id);
+  const persons = await db.people.getMany(roster.map((row) => row.personId));
+  const byId = new Map(persons.map((person) => [person.id, person]));
+
+  const eventPeople: (EventPerson & { person: Person | null })[] = roster.map((row) => ({
+    ...row,
+    person: byId.get(row.personId) ?? null,
+  }));
+
+  return { ...event, eventPeople };
 }
 
-export async function create(values: typeof events.$inferInsert) {
-  const [row] = await db.insert(events).values(values).returning();
-  return row;
+export async function create(values: Partial<Event>) {
+  return db.events.create(values);
 }
 
-export async function update(id: string, values: Partial<typeof events.$inferInsert>) {
-  const [row] = await db
-    .update(events)
-    .set({ ...values, updatedAt: new Date() })
-    .where(eq(events.id, id))
-    .returning();
-  return row;
+export async function update(id: string, values: Partial<Event>) {
+  return db.events.updateById(id, { ...values, updatedAt: new Date() });
 }
 
 export async function setArchived(id: string, archived: boolean) {
-  const [row] = await db
-    .update(events)
-    .set({ archivedAt: archived ? new Date() : null, updatedAt: new Date() })
-    .where(eq(events.id, id))
-    .returning();
-  return row;
+  return db.events.updateById(id, { archivedAt: archived ? new Date() : null, updatedAt: new Date() });
 }
 
 export const eventsRepository = { list, findById, create, update, setArchived };

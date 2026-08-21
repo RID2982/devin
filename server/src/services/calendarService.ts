@@ -1,13 +1,15 @@
-import { and, gte, isNull, lte } from 'drizzle-orm';
-import { db, schema } from '../lib/db';
-
-const { events, tasks } = schema;
+import { db } from '../lib/db';
+import { isArchived } from '../lib/query';
 
 export async function getRange(from: Date, to: Date) {
-  const [rangeEvents, rangeTasks] = await Promise.all([
-    db.select().from(events).where(and(isNull(events.archivedAt), gte(events.date, from), lte(events.date, to))),
-    db.select().from(tasks).where(and(isNull(tasks.archivedAt), gte(tasks.deadline, from), lte(tasks.deadline, to))),
-  ]);
+  const [allEvents, allTasks] = await Promise.all([db.events.all(), db.tasks.all()]);
+
+  const rangeEvents = allEvents.filter(
+    (e) => !isArchived(e.archivedAt) && e.date >= from && e.date <= to,
+  );
+  const rangeTasks = allTasks.filter(
+    (t) => !isArchived(t.archivedAt) && t.deadline !== null && t.deadline >= from && t.deadline <= to,
+  );
 
   return {
     events: rangeEvents.map((e) => ({

@@ -1,45 +1,38 @@
-import { and, asc, desc, eq, ilike, isNotNull, isNull, or, sql, SQL } from 'drizzle-orm';
+import type { Person } from '@app/database';
 import { db, schema } from '../lib/db';
+import { ilikeAny, isArchived, paginate, sortRows } from '../lib/query';
 import type { ListQuery } from '../lib/listQuery';
 
-const { people } = schema;
-
-function buildWhere(query: ListQuery): SQL | undefined {
-  const conditions: SQL[] = [];
-  conditions.push(query.archived ? isNotNull(people.archivedAt) : isNull(people.archivedAt));
-  if (query.filters.role) conditions.push(eq(people.role, query.filters.role));
-  if (query.search) conditions.push(or(ilike(people.name, `%${query.search}%`), ilike(people.email, `%${query.search}%`))!);
-  return conditions.length ? and(...conditions) : undefined;
+function matches(person: Person, query: ListQuery): boolean {
+  if (isArchived(person.archivedAt) !== query.archived) return false;
+  if (query.filters.role && person.role !== query.filters.role) return false;
+  if (query.search && !ilikeAny(query.search, person.name, person.email)) return false;
+  return true;
 }
 
 export async function list(query: ListQuery) {
-  const where = buildWhere(query);
-  const orderBy = query.sortDir === 'desc' ? desc(people.name) : asc(people.name);
+  const all = await db.people.all();
+  const filtered = all.filter((person) => matches(person, query));
+  // People are always ordered by name; only the direction is caller-controlled.
+  const sorted = sortRows(filtered, schema.people, 'name', query.sortDir);
 
-  const [rows, [{ count }]] = await Promise.all([
-    db.select().from(people).where(where).orderBy(orderBy).limit(query.pageSize).offset((query.page - 1) * query.pageSize),
-    db.select({ count: sql<number>`count(*)::int` }).from(people).where(where),
-  ]);
-  return { rows, total: count };
+  return { rows: paginate(sorted, query.page, query.pageSize), total: filtered.length };
 }
 
 export async function findById(id: string) {
-  return db.query.people.findFirst({ where: eq(people.id, id) });
+  return db.people.getById(id);
 }
 
-export async function create(values: typeof people.$inferInsert) {
-  const [row] = await db.insert(people).values(values).returning();
-  return row;
+export async function create(values: Partial<Person>) {
+  return db.people.create(values);
 }
 
-export async function update(id: string, values: Partial<typeof people.$inferInsert>) {
-  const [row] = await db.update(people).set({ ...values, updatedAt: new Date() }).where(eq(people.id, id)).returning();
-  return row;
+export async function update(id: string, values: Partial<Person>) {
+  return db.people.updateById(id, { ...values, updatedAt: new Date() });
 }
 
 export async function setArchived(id: string, archived: boolean) {
-  const [row] = await db.update(people).set({ archivedAt: archived ? new Date() : null, updatedAt: new Date() }).where(eq(people.id, id)).returning();
-  return row;
+  return db.people.updateById(id, { archivedAt: archived ? new Date() : null, updatedAt: new Date() });
 }
 
 export const peopleRepository = { list, findById, create, update, setArchived };

@@ -1,19 +1,18 @@
-import { and, asc, gte, isNull, lt } from 'drizzle-orm';
-import { db, schema } from '../lib/db';
-
-const { events } = schema;
+import type { Event } from '@app/database';
+import { db } from '../lib/db';
+import { isArchived, sortByKey } from '../lib/query';
 
 export async function getYear(year: number) {
   const start = new Date(Date.UTC(year, 0, 1));
   const end = new Date(Date.UTC(year + 1, 0, 1));
 
-  const rows = await db
-    .select()
-    .from(events)
-    .where(and(isNull(events.archivedAt), gte(events.date, start), lt(events.date, end)))
-    .orderBy(asc(events.date));
+  const all = await db.events.all();
+  const rows = sortByKey(
+    all.filter((e) => !isArchived(e.archivedAt) && e.date >= start && e.date < end),
+    'date',
+  );
 
-  const months: Record<number, typeof rows> = {};
+  const months: Record<number, Event[]> = {};
   for (let m = 0; m < 12; m++) months[m] = [];
   for (const row of rows) months[row.date.getUTCMonth()].push(row);
 

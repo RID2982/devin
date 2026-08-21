@@ -1,7 +1,6 @@
 import crypto from 'node:crypto';
 import jwt from 'jsonwebtoken';
-import { eq } from 'drizzle-orm';
-import { db, schema } from '../lib/db';
+import { db, INDEXES } from '../lib/db';
 import { AppError } from '../lib/AppError';
 import { env } from '../config/env';
 
@@ -16,13 +15,21 @@ function timingSafeEqual(a: string, b: string): boolean {
   return crypto.timingSafeEqual(bufA, bufB);
 }
 
-/** Finds (or lazily creates) the single admin's app_users row. */
+/** Finds (or lazily creates) the single admin's app_users item. */
 async function getOrCreateAdminUser() {
-  const [existing] = await db.select().from(schema.appUsers).where(eq(schema.appUsers.email, env.ADMIN_EMAIL)).limit(1);
+  const [indexed] = await db.appUsers.queryIndex(INDEXES.appUsersByEmail, env.ADMIN_EMAIL, { limit: 1 });
+  if (indexed) return indexed;
+
+  // A GSI is eventually consistent, so a miss here does not prove the row is
+  // absent — and DynamoDB has no unique constraint to catch a double insert.
+  // The table holds exactly one admin, so confirming with a consistent read is
+  // cheap insurance against creating a second one on a concurrent first login.
+  const existing = (await db.appUsers.scan({ ConsistentRead: true })).find(
+    (user) => user.email === env.ADMIN_EMAIL,
+  );
   if (existing) return existing;
 
-  const [created] = await db.insert(schema.appUsers).values({ email: env.ADMIN_EMAIL, name: 'Admin' }).returning();
-  return created;
+  return db.appUsers.create({ email: env.ADMIN_EMAIL, name: 'Admin' });
 }
 
 export async function login(email: string, password: string) {
@@ -34,14 +41,15 @@ export async function login(email: string, password: string) {
   }
 
   const user = await getOrCreateAdminUser();
-  const token = jwt.sign({ sub: user.id, email: user.email }, env.JWT_SECRET, { expiresIn: env.JWT_EXPIRES_IN as jwt.SignOptions['expiresIn'] });
+  const token = jwt.sign({ sub: user.id, email: user.email }, env.JWT_SECRET, {
+    expiresIn: env.JWT_EXPIRES_IN as jwt.SignOptions['expiresIn'],
+  });
 
   return { token, user };
 }
 
 export async function findById(id: string) {
-  const [user] = await db.select().from(schema.appUsers).where(eq(schema.appUsers.id, id)).limit(1);
-  return user;
+  return db.appUsers.getById(id);
 }
 
 export const authService = { login, findById };

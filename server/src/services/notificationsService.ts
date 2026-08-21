@@ -1,15 +1,13 @@
-import { desc, eq } from 'drizzle-orm';
-import { db, schema } from '../lib/db';
+import { db, INDEXES } from '../lib/db';
 import { AppError } from '../lib/AppError';
 
-const { notifications } = schema;
-
 export async function listFor(userId: string) {
-  return db.select().from(notifications).where(eq(notifications.userId, userId)).orderBy(desc(notifications.createdAt));
+  // (userId, createdAt) is the index key, so newest-first is a reverse Query.
+  return db.notifications.queryIndex(INDEXES.notificationsByUser, userId, { ascending: false });
 }
 
 export async function markRead(id: string) {
-  const [row] = await db.update(notifications).set({ isRead: true }).where(eq(notifications.id, id)).returning();
+  const row = await db.notifications.updateById(id, { isRead: true });
   if (!row) throw AppError.notFound('Notification', id);
   return row;
 }

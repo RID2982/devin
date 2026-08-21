@@ -1,19 +1,24 @@
-import { eq } from 'drizzle-orm';
-import { db, schema } from '../lib/db';
+import type { ChecklistItem } from '@app/database';
+import { db, INDEXES } from '../lib/db';
 import { AppError } from '../lib/AppError';
+import { sortByKey } from '../lib/query';
 import { activityLogService } from './activityLogService';
 import type { CreateChecklistItemInput, UpdateChecklistItemInput } from '../validators/checklist.schema';
 
-const { checklistItems } = schema;
-
 export async function listFor(eventId?: string, taskId?: string) {
-  if (eventId) return db.select().from(checklistItems).where(eq(checklistItems.eventId, eventId)).orderBy(checklistItems.order);
-  if (taskId) return db.select().from(checklistItems).where(eq(checklistItems.taskId, taskId)).orderBy(checklistItems.order);
+  if (eventId) {
+    const items = await db.checklistItems.queryIndex(INDEXES.checklistItemsByEvent, eventId);
+    return sortByKey(items, 'order');
+  }
+  if (taskId) {
+    const items = await db.checklistItems.queryIndex(INDEXES.checklistItemsByTask, taskId);
+    return sortByKey(items, 'order');
+  }
   throw AppError.badRequest('eventId or taskId query param is required');
 }
 
 export async function create(input: CreateChecklistItemInput, actorUserId?: string) {
-  const [row] = await db.insert(checklistItems).values(input).returning();
+  const row = await db.checklistItems.create(input);
   await activityLogService.record({
     action: 'CHECKLIST_ITEM_ADDED',
     summary: `Checklist item "${row.label}" added`,
@@ -25,13 +30,13 @@ export async function create(input: CreateChecklistItemInput, actorUserId?: stri
 }
 
 export async function update(id: string, input: UpdateChecklistItemInput, actorUserId?: string) {
-  const [existing] = await db.select().from(checklistItems).where(eq(checklistItems.id, id)).limit(1);
+  const existing = await db.checklistItems.getById(id);
   if (!existing) throw AppError.notFound('ChecklistItem', id);
 
-  const values: Partial<typeof checklistItems.$inferInsert> = { ...input, updatedAt: new Date() };
+  const values: Partial<ChecklistItem> = { ...input, updatedAt: new Date() };
   if (input.isDone !== undefined) values.completedAt = input.isDone ? new Date() : null;
 
-  const [row] = await db.update(checklistItems).set(values).where(eq(checklistItems.id, id)).returning();
+  const row = (await db.checklistItems.updateById(id, values))!;
 
   if (input.isDone && !existing.isDone) {
     await activityLogService.record({
@@ -47,11 +52,11 @@ export async function update(id: string, input: UpdateChecklistItemInput, actorU
 }
 
 export async function remove(id: string) {
-  await db.delete(checklistItems).where(eq(checklistItems.id, id));
+  await db.checklistItems.deleteById(id);
 }
 
 export async function reorder(items: { id: string; order: number }[]) {
-  await Promise.all(items.map((i) => db.update(checklistItems).set({ order: i.order }).where(eq(checklistItems.id, i.id))));
+  await Promise.all(items.map((i) => db.checklistItems.updateById(i.id, { order: i.order })));
   return { success: true };
 }
 
